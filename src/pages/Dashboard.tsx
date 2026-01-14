@@ -48,17 +48,23 @@ const Dashboard = () => {
   }, [navigate]);
 
   useEffect(() => {
-    // Load counts from localStorage
     const loadCounts = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const documents = localStorage.getItem(`documents_${user.id}`);
-      const bills = localStorage.getItem(`bills_${user.id}`);
+      // Fetch document count from Supabase
+      const { count } = await supabase
+        .from('documents')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
 
-      setDocumentCount(documents ? JSON.parse(documents).length : 0);
+      setDocumentCount(count || 0);
+
+      // Bills are currently stored in localStorage (client-side only feature for now)
+      const bills = localStorage.getItem(`bills_${user.id}`);
       setBillCount(bills ? JSON.parse(bills).length : 0);
     };
+
     loadCounts();
   }, []);
 
