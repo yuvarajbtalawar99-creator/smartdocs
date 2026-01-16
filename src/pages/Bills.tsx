@@ -14,7 +14,8 @@ import {
   Bell,
   AlertCircle,
   CheckCircle2,
-  FileText
+  FileText,
+  RefreshCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useQueryClient } from "@tanstack/react-query";
+import { useBills } from "@/integrations/supabase/hooks/useBills";
+import { useDownload } from "@/integrations/supabase/hooks/useDownload";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -42,6 +46,7 @@ interface Bill {
   reminder_sent: boolean;
   file_name?: string;
   file_type?: string;
+  file_path?: string;
 }
 
 const BILL_TYPES = [
@@ -58,8 +63,9 @@ const BILL_TYPES = [
 const FREQUENCIES = ["Weekly", "Monthly", "Yearly"];
 
 const Bills = () => {
-  const [bills, setBills] = useState<Bill[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: bills = [], isLoading, isError } = useBills();
+  const { downloadFile, downloading: fileDownloading } = useDownload();
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
@@ -73,28 +79,6 @@ const Bills = () => {
     frequency: "Monthly",
     file: null as File | null,
   });
-
-  useEffect(() => {
-    loadBills();
-    checkUpcomingBills();
-  }, []);
-
-  const loadBills = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // In a real app, you'd fetch from Supabase table
-      const stored = localStorage.getItem(`bills_${user.id}`);
-      if (stored) {
-        setBills(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error("Error loading bills:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const checkUpcomingBills = () => {
     const today = new Date();
@@ -111,6 +95,13 @@ const Bills = () => {
       });
     }
   };
+
+  useEffect(() => {
+    if (bills.length > 0) {
+      checkUpcomingBills();
+    }
+  }, [bills]);
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -154,33 +145,48 @@ const Bills = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const fileUrl = reader.result as string;
+      // 1. Upload file to Supabase Storage
+      const fileExt = formData.file.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `${user.id}/bills/${fileName}`;
 
-        const newBill: Bill = {
-          id: Date.now().toString(),
+      const { error: uploadError } = await supabase.storage
+        .from('documents')
+        .upload(filePath, formData.file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get Public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('documents')
+        .getPublicUrl(filePath);
+
+      // 3. Insert into Supabase DB
+      const { data, error: insertError } = await supabase
+        .from('bills')
+        .insert({
           bill_type: formData.bill_type,
           amount: parseFloat(formData.amount),
           due_date: formData.due_date.toISOString(),
           frequency: formData.frequency,
-          file_url: fileUrl,
-          uploaded_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          file_url: publicUrl,
           user_id: user.id,
           paid: false,
           reminder_sent: false,
           file_name: formData.file.name,
           file_type: formData.file.type,
-        };
+          file_path: filePath,
+        })
+        .select()
+        .single();
 
-        const updated = [...bills, newBill];
-        setBills(updated);
-        localStorage.setItem(`bills_${user.id}`, JSON.stringify(updated));
+      if (insertError) throw insertError;
 
+      if (data) {
+        queryClient.invalidateQueries({ queryKey: ['bills'] });
         toast({
           title: "Bill Added Successfully",
-          description: "Your bill has been stored and tracked.",
+          description: "Your bill has been stored securely.",
         });
 
         setFormData({
@@ -191,9 +197,9 @@ const Bills = () => {
           file: null
         });
         setUploadDialogOpen(false);
-      };
-      reader.readAsDataURL(formData.file);
+      }
     } catch (error: any) {
+      console.error("Upload error:", error);
       toast({
         title: "Upload failed",
         description: error.message || "Failed to add bill.",
@@ -206,18 +212,21 @@ const Bills = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { error } = await supabase
+        .from('bills')
+        .delete()
+        .eq('id', id);
 
-      const updated = bills.filter(bill => bill.id !== id);
-      setBills(updated);
-      localStorage.setItem(`bills_${user.id}`, JSON.stringify(updated));
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
 
       toast({
         title: "Bill deleted",
         description: "The bill has been removed.",
       });
     } catch (error) {
+      console.error("Delete error:", error);
       toast({
         title: "Delete failed",
         description: "Failed to delete bill.",
@@ -227,40 +236,38 @@ const Bills = () => {
   };
 
   const handleDownload = async (bill: Bill) => {
-    try {
-      // Determine file extension and name
-      let fileName = bill.file_name;
-
-      if (!fileName) {
-        // Fallback for existing data without file_name
-        const ext = bill.file_type?.includes('pdf') || bill.file_url.includes('application/pdf') ? 'pdf' :
-          bill.file_type?.includes('image') || bill.file_url.includes('image') ? 'jpg' : 'bin';
-
-        fileName = `${bill.bill_type}_${format(new Date(bill.due_date), 'yyyy-MM-dd')}.${ext}`;
+    if (!bill.file_path) {
+      // Fallback for legacy bills without file_path
+      try {
+        let fileName = bill.file_name;
+        if (!fileName) {
+          const ext = bill.file_type?.includes('pdf') || bill.file_url.includes('application/pdf') ? 'pdf' :
+            bill.file_type?.includes('image') || bill.file_url.includes('image') ? 'jpg' : 'bin';
+          fileName = `${bill.bill_type}_${format(new Date(bill.due_date), 'yyyy-MM-dd')}.${ext}`;
+        }
+        const response = await fetch(bill.file_url);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName!;
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+      } catch (error) {
+        toast({ title: "Download failed", description: "Public URL access failed.", variant: "destructive" });
       }
-
-      // If it's a data URL, we can download directly but creating a blob is safer for large files
-      // If it's a remote URL, we must fetch it as blob
-      const response = await fetch(bill.file_url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName!;
-      document.body.appendChild(link);
-      link.click();
-
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("Download error:", error);
-      toast({
-        title: "Download failed",
-        description: "Could not download the bill file.",
-        variant: "destructive",
-      });
+      return;
     }
+
+    let fileName = bill.file_name;
+    if (!fileName) {
+      const ext = bill.file_type?.includes('pdf') ? 'pdf' : 'jpg';
+      fileName = `${bill.bill_type}_${format(new Date(bill.due_date), 'yyyy-MM-dd')}.${ext}`;
+    }
+
+    await downloadFile('documents', bill.file_path, fileName);
   };
 
   const handleView = (bill: Bill) => {
@@ -270,20 +277,25 @@ const Bills = () => {
 
   const markAsPaid = async (id: string) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { error } = await supabase
+        .from('bills')
+        .update({ paid: true })
+        .eq('id', id);
 
-      const updated = bills.map(bill =>
-        bill.id === id ? { ...bill, paid: true, updated_at: new Date().toISOString() } : bill
-      );
-      setBills(updated);
-      localStorage.setItem(`bills_${user.id}`, JSON.stringify(updated));
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ['bills'] });
+      // const updated = bills.map(bill =>
+      //   bill.id === id ? { ...bill, paid: true, updated_at: new Date().toISOString() } : bill
+      // );
+      // setBills(updated);
 
       toast({
         title: "Bill marked as paid",
         description: "The bill has been marked as paid.",
       });
     } catch (error) {
+      console.error("Update error:", error);
       toast({
         title: "Update failed",
         description: "Failed to update bill.",
@@ -507,21 +519,37 @@ const Bills = () => {
         </Card>
 
         {/* Bills List */}
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
           </div>
-        ) : bills.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Receipt className="h-16 w-16 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No bills yet</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                Add your first bill to start tracking
+        ) : isError ? (
+          <Card className="border-destructive/20 bg-destructive/5">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Failed to load bills</h3>
+              <p className="text-muted-foreground mb-6 max-w-xs">
+                There was an error fetching your bills. Please try again.
               </p>
-              <Button onClick={() => setUploadDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Bill
+              <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['bills'] })}>
+                <RefreshCcw className="h-4 w-4 mr-2" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        ) : bills.length === 0 ? (
+          <Card className="bg-secondary/20 border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="p-4 bg-primary/10 rounded-full mb-6">
+                <Receipt className="h-12 w-12 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">No bills tracked</h3>
+              <p className="text-muted-foreground mb-8 max-w-sm">
+                Track your utilities, rent, and other expenses in one place. Add your first bill to see how it works.
+              </p>
+              <Button onClick={() => setUploadDialogOpen(true)} size="lg" className="px-8 shadow-lg shadow-primary/20">
+                <Plus className="h-5 w-5 mr-2" />
+                Add First Bill
               </Button>
             </CardContent>
           </Card>
@@ -567,9 +595,14 @@ const Bills = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDownload(bill)}
+                        disabled={fileDownloading === bill.file_path}
                       >
-                        <Download className="h-3 w-3 mr-1" />
-                        Download
+                        {fileDownloading === bill.file_path ? (
+                          <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-1" />
+                        ) : (
+                          <Download className="h-3 w-3 mr-1" />
+                        )}
+                        {fileDownloading === bill.file_path ? "..." : "Download"}
                       </Button>
                       {!bill.paid && (
                         <Button

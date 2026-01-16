@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Layout from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -10,10 +10,11 @@ import {
   Edit,
   Plus,
   File,
-  Image as ImageIcon,
+  ImageIcon,
   FileSpreadsheet,
-  Calendar,
-  CheckCircle2
+  CheckCircle2,
+  AlertCircle,
+  RefreshCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,13 +23,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
+import { useQueryClient } from "@tanstack/react-query";
+import { useDocuments } from "@/integrations/supabase/hooks/useDocuments";
+import { useDownload } from "@/integrations/supabase/hooks/useDownload";
 
 interface Document {
   id: string;
   name: string;
   type: string;
   file_url: string;
+  file_path: string;
   file_type: string;
   uploaded_at: string;
   updated_at: string;
@@ -50,8 +54,30 @@ const DOCUMENT_TYPES = [
 ];
 
 const Documents = () => {
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError
+  } = useDocuments();
+  const { downloadFile, downloading: fileDownloading } = useDownload();
+
+  const documents = data?.pages.flatMap(page => page.map(doc => ({
+    id: doc.id,
+    name: doc.name,
+    type: doc.type,
+    file_path: doc.file_path,
+    file_url: doc.file_path.startsWith('http') ? doc.file_path :
+      `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/documents/${doc.file_path}`,
+    file_type: doc.file_type,
+    uploaded_at: doc.uploaded_at,
+    updated_at: doc.updated_at,
+    user_id: doc.user_id,
+  }))) || [];
+
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -66,63 +92,13 @@ const Documents = () => {
     file: null as File | null,
   });
 
-  useEffect(() => {
-    loadDocuments();
-  }, []);
-
-  const loadDocuments = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Try to load from Supabase database first
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('uploaded_at', { ascending: false });
-
-      if (error) {
-        console.error("Error loading from Supabase:", error);
-        // Fallback to localStorage if table doesn't exist yet
-        const stored = localStorage.getItem(`documents_${user.id}`);
-        if (stored) {
-          setDocuments(JSON.parse(stored));
-        }
-      } else if (data) {
-        // Map Supabase data to Document interface
-        setDocuments(data.map(doc => ({
-          id: doc.id,
-          name: doc.name,
-          type: doc.type,
-          file_url: doc.file_path.startsWith('http') ? doc.file_path :
-            `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/documents/${doc.file_path}`,
-          file_type: doc.file_type,
-          uploaded_at: doc.uploaded_at,
-          updated_at: doc.updated_at,
-          user_id: doc.user_id,
-        })));
-      }
-    } catch (error) {
-      console.error("Error loading documents:", error);
-      // Fallback to localStorage
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const stored = localStorage.getItem(`documents_${user.id}`);
-        if (stored) {
-          setDocuments(JSON.parse(stored));
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
+  const handleLoadMore = () => {
+    fetchNextPage();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      // Validate MIME types - Allowed: PDF, PNG, JPG, Word, Excel
-      // Using proper MIME types with wildcards for future-proof validation
       const validTypes = [
         'application/pdf',
         'image/png',
@@ -134,7 +110,6 @@ const Documents = () => {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       ];
 
-      // Also allow wildcards for image types
       const isImage = file.type.startsWith('image/');
       const isValidType = validTypes.includes(file.type) || isImage;
 
@@ -147,7 +122,6 @@ const Documents = () => {
         return;
       }
 
-      // Validate file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         toast({
           title: "File too large",
@@ -166,7 +140,7 @@ const Documents = () => {
     setFormData({
       name: doc.name,
       type: doc.type,
-      file: null, // User can optionally upload new file
+      file: null,
     });
     setEditDialogOpen(true);
   };
@@ -200,21 +174,11 @@ const Documents = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Generate unique file path: user_id/filename_timestamp.ext
       const fileExt = formData.file.name.split('.').pop();
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      console.log("Uploading to Supabase Storage...", {
-        bucket: 'documents',
-        filePath,
-        fileName: formData.file.name,
-        fileSize: formData.file.size,
-        userId: user.id
-      });
-
-      // Upload file to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('documents')
         .upload(filePath, formData.file, {
           cacheControl: '3600',
@@ -222,29 +186,21 @@ const Documents = () => {
         });
 
       if (uploadError) {
-        // Show the actual error to help debug
         console.error("Storage upload error:", uploadError);
         toast({
           title: "Upload Failed",
-          description: `Storage error: ${uploadError.message}. Check browser console (F12) for details. Common issues: Storage policies not set up, bucket permissions, or file size limits.`,
+          description: `Storage error: ${uploadError.message}`,
           variant: "destructive",
-          duration: 10000,
         });
         setUploading(false);
         return;
       }
 
-      console.log("File uploaded successfully:", uploadData);
-
-      // Get public URL for the uploaded file
       const { data: urlData } = supabase.storage
         .from('documents')
         .getPublicUrl(filePath);
 
-      console.log("Public URL:", urlData?.publicUrl);
-
-      // Save metadata to database
-      const { data: dbData, error: dbError } = await supabase
+      const { error: dbError } = await supabase
         .from('documents')
         .insert({
           user_id: user.id,
@@ -253,34 +209,26 @@ const Documents = () => {
           file_path: filePath,
           file_type: formData.file.type,
           file_size: formData.file.size,
-        })
-        .select()
-        .single();
+        });
 
       if (dbError) {
         console.error("Database insert error:", dbError);
-        // File is uploaded but metadata failed - still show success but warn
         toast({
-          title: "File Uploaded, Metadata Failed",
-          description: `File uploaded to storage but couldn't save metadata: ${dbError.message}. Check if 'documents' table exists and RLS policies are set.`,
+          title: "Database Error",
+          description: "Failed to save document metadata.",
           variant: "destructive",
-          duration: 10000,
         });
       } else {
-        console.log("Database record created:", dbData);
+        queryClient.invalidateQueries({ queryKey: ['documents'] });
+        toast({
+          title: "Uploaded Successfully",
+          description: "Your document has been stored securely.",
+        });
+        setFormData({ name: "", type: "", file: null });
+        setUploadDialogOpen(false);
+        setEditingDocument(null);
       }
 
-      // Reload documents
-      await loadDocuments();
-
-      toast({
-        title: "Uploaded Successfully",
-        description: "Your document has been stored securely in Supabase Storage.",
-      });
-
-      setFormData({ name: "", type: "", file: null });
-      setUploadDialogOpen(false);
-      setEditingDocument(null);
     } catch (error: any) {
       toast({
         title: "Upload failed",
@@ -294,11 +242,6 @@ const Documents = () => {
 
   const handleUpdate = async () => {
     if (!editingDocument || !formData.type) {
-      toast({
-        title: "Missing information",
-        description: "Please select a document type.",
-        variant: "destructive",
-      });
       return;
     }
 
@@ -307,53 +250,26 @@ const Documents = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // If a new file is uploaded, replace the old one
       if (formData.file) {
-        // Delete old file if it's in Supabase Storage
+        // Delete old file logic omitted for brevity, focusing on new upload
         if (editingDocument.file_url.includes('storage/v1/object/public')) {
           const urlParts = editingDocument.file_url.split('/storage/v1/object/public/documents/');
           if (urlParts.length > 1) {
             const oldFilePath = urlParts[1];
-
-            // Delete old file from Storage
-            await supabase.storage
-              .from('documents')
-              .remove([oldFilePath]);
+            await supabase.storage.from('documents').remove([oldFilePath]);
           }
         }
 
-        // Upload new file
         const fileExt = formData.file.name.split('.').pop();
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         const filePath = `${user.id}/${fileName}`;
 
-        console.log("Uploading new file to replace old one...", { filePath });
-
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('documents')
-          .upload(filePath, formData.file, {
-            cacheControl: '3600',
-            upsert: false
-          });
+          .upload(filePath, formData.file);
 
-        if (uploadError) {
-          console.error("Storage upload error:", uploadError);
-          // Fallback to localStorage if storage fails
-          const reader = new FileReader();
-          reader.onloadend = async () => {
-            const fileUrl = reader.result as string;
-            await updateDocumentMetadata(fileUrl, formData.file!.type);
-          };
-          reader.readAsDataURL(formData.file);
-          return;
-        }
+        if (uploadError) throw uploadError;
 
-        // Get public URL for new file
-        const { data: urlData } = supabase.storage
-          .from('documents')
-          .getPublicUrl(filePath);
-
-        // Update database with new file path
         const { error: dbError } = await supabase
           .from('documents')
           .update({
@@ -367,24 +283,9 @@ const Documents = () => {
           .eq('id', editingDocument.id)
           .eq('user_id', user.id);
 
-        if (dbError) {
-          console.error("Database update error:", dbError);
-          // Update localStorage as fallback
-          await updateDocumentMetadata(urlData?.publicUrl || '', formData.file.type);
-          return;
-        }
+        if (dbError) throw dbError;
 
-        await loadDocuments();
-        toast({
-          title: "Document Updated",
-          description: "Your document has been updated with the new file.",
-        });
-
-        setFormData({ name: "", type: "", file: null });
-        setEditDialogOpen(false);
-        setEditingDocument(null);
       } else {
-        // Only update metadata (no new file)
         const { error: dbError } = await supabase
           .from('documents')
           .update({
@@ -395,62 +296,27 @@ const Documents = () => {
           .eq('id', editingDocument.id)
           .eq('user_id', user.id);
 
-        if (dbError) {
-          console.error("Database update error:", dbError);
-          // Update localStorage as fallback
-          await updateDocumentMetadata(null, null);
-        } else {
-          await loadDocuments();
-          toast({
-            title: "Document Updated",
-            description: "Your document details have been updated.",
-          });
-        }
-
-        setFormData({ name: "", type: "", file: null });
-        setEditDialogOpen(false);
-        setEditingDocument(null);
+        if (dbError) throw dbError;
       }
+
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      toast({
+        title: "Document Updated",
+        description: "Your document details have been updated.",
+      });
+
+      setFormData({ name: "", type: "", file: null });
+      setEditDialogOpen(false);
+      setEditingDocument(null);
+
     } catch (error: any) {
       toast({
         title: "Update failed",
-        description: error.message || "Failed to update document.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
       setUploading(false);
-    }
-  };
-
-  const updateDocumentMetadata = async (newFileUrl: string | null, newFileType: string | null) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !editingDocument) return;
-
-      // Update localStorage as fallback
-      const updated = documents.map(doc => {
-        if (doc.id === editingDocument.id) {
-          return {
-            ...doc,
-            name: formData.name || doc.name,
-            type: formData.type,
-            file_url: newFileUrl || doc.file_url,
-            file_type: newFileType || doc.file_type,
-            updated_at: new Date().toISOString(),
-          };
-        }
-        return doc;
-      });
-
-      setDocuments(updated);
-      localStorage.setItem(`documents_${user.id}`, JSON.stringify(updated));
-
-      toast({
-        title: "Document Updated",
-        description: "Your document has been updated (local storage).",
-      });
-    } catch (error) {
-      console.error("Error updating document:", error);
     }
   };
 
@@ -462,43 +328,16 @@ const Documents = () => {
       const docToDelete = documents.find(doc => doc.id === id);
       if (!docToDelete) return;
 
-      // Try to delete from Supabase Storage and Database
       if (docToDelete.file_url.includes('storage/v1/object/public')) {
-        // Extract file path from URL
         const urlParts = docToDelete.file_url.split('/storage/v1/object/public/documents/');
         if (urlParts.length > 1) {
-          const filePath = urlParts[1];
-
-          // Delete from Storage
-          const { error: storageError } = await supabase.storage
-            .from('documents')
-            .remove([filePath]);
-
-          if (storageError) {
-            console.error("Storage delete error:", storageError);
-          }
-
-          // Delete from Database
-          const { error: dbError } = await supabase
-            .from('documents')
-            .delete()
-            .eq('id', id)
-            .eq('user_id', user.id);
-
-          if (dbError) {
-            console.error("Database delete error:", dbError);
-          }
+          await supabase.storage.from('documents').remove([urlParts[1]]);
         }
-      } else {
-        // Fallback: delete from localStorage
-        const updated = documents.filter(doc => doc.id !== id);
-        setDocuments(updated);
-        localStorage.setItem(`documents_${user.id}`, JSON.stringify(updated));
       }
 
-      // Reload documents
-      await loadDocuments();
+      await supabase.from('documents').delete().eq('id', id).eq('user_id', user.id);
 
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
       toast({
         title: "Document deleted",
         description: "The document has been removed.",
@@ -513,28 +352,13 @@ const Documents = () => {
   };
 
   const handleDownload = async (doc: Document) => {
-    try {
-      setLoading(true);
-      const response = await fetch(doc.file_url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = doc.name; // Use the original file name
-      document.body.appendChild(link);
-      link.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Download failed:', error);
-      toast({
-        title: "Download failed",
-        description: "Could not download the file found.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
+    // If it's a legacy external URL, fall back to old behavior
+    if (doc.file_url.startsWith('http') && !doc.file_url.includes('storage/v1/object/public')) {
+      window.open(doc.file_url, '_blank');
+      return;
     }
+
+    await downloadFile('documents', doc.file_path, doc.name);
   };
 
   const handleView = (doc: Document) => {
@@ -561,7 +385,6 @@ const Documents = () => {
   return (
     <Layout>
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -645,7 +468,6 @@ const Documents = () => {
           </div>
         </div>
 
-        {/* Edit Dialog */}
         <Dialog open={editDialogOpen} onOpenChange={(open) => {
           setEditDialogOpen(open);
           if (!open) {
@@ -656,7 +478,7 @@ const Documents = () => {
             <DialogHeader>
               <DialogTitle>Edit Document</DialogTitle>
               <DialogDescription>
-                Update document details or upload a new file to replace the existing one
+                Update document details or upload a new file
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -685,23 +507,13 @@ const Documents = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-file">Upload New File (Optional - replaces existing file)</Label>
+                <Label htmlFor="edit-file">Upload New File (Optional)</Label>
                 <Input
                   id="edit-file"
                   type="file"
                   accept="application/pdf,image/png,image/jpeg,image/jpg,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   onChange={handleFileChange}
                 />
-                {formData.file && (
-                  <p className="text-sm text-muted-foreground">
-                    New file selected: {formData.file.name} ({(formData.file.size / 1024 / 1024).toFixed(2)} MB)
-                  </p>
-                )}
-                {editingDocument && !formData.file && (
-                  <p className="text-sm text-muted-foreground">
-                    Current file: {editingDocument.name}
-                  </p>
-                )}
               </div>
               <Button
                 onClick={handleUpdate}
@@ -714,7 +526,6 @@ const Documents = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Supported Documents Info */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Supported Documents</CardTitle>
@@ -742,22 +553,37 @@ const Documents = () => {
           </CardContent>
         </Card>
 
-        {/* Documents List */}
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
           </div>
-        ) : documents.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <FileText className="h-16 w-16 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No documents yet</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                Upload your first document to get started
+        ) : isError ? (
+          <Card className="border-destructive/20 bg-destructive/5">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Failed to load documents</h3>
+              <p className="text-muted-foreground mb-6 max-w-xs">
+                There was an error fetching your documents. Please try refreshing the page.
               </p>
-              <Button onClick={() => setUploadDialogOpen(true)}>
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Document
+              <Button variant="outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['documents'] })}>
+                <RefreshCcw className="h-4 w-4 mr-2" />
+                Retry Loading
+              </Button>
+            </CardContent>
+          </Card>
+        ) : documents.length === 0 ? (
+          <Card className="bg-secondary/20 border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="p-4 bg-primary/10 rounded-full mb-6">
+                <FileText className="h-12 w-12 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">No documents found</h3>
+              <p className="text-muted-foreground mb-8 max-w-sm">
+                Your secure vault is empty. Upload your first document to keep it safe and accessible.
+              </p>
+              <Button onClick={() => setUploadDialogOpen(true)} size="lg" className="px-8 shadow-lg shadow-primary/20">
+                <Upload className="h-5 w-5 mr-2" />
+                Get Started
               </Button>
             </CardContent>
           </Card>
@@ -777,50 +603,53 @@ const Documents = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      <span>Uploaded: {formatDate(doc.uploaded_at)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      <span>Updated: {formatDate(doc.updated_at)}</span>
-                    </div>
-                    <div className="flex gap-2 pt-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleView(doc)}
-                        className="flex-1"
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(doc)}
-                        className="flex-1"
-                      >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownload(doc)}
-                      >
-                        <Download className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(doc.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                  <div className="flex justify-between items-center text-sm text-muted-foreground mb-4">
+                    <span>{formatDate(doc.uploaded_at)}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleView(doc)}
+                    >
+                      <Eye className="h-3 w-3 mr-2" />
+                      View
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleDownload(doc)}
+                      disabled={fileDownloading === doc.file_path}
+                    >
+                      {fileDownloading === doc.file_path ? (
+                        <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-2" />
+                      ) : (
+                        <Download className="h-3 w-3 mr-2" />
+                      )}
+                      {fileDownloading === doc.file_path ? "..." : "Download"}
+                    </Button>
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleEdit(doc)}
+                    >
+                      <Edit className="h-3 w-3 mr-2" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(doc.id)}
+                    >
+                      <Trash2 className="h-3 w-3 mr-2" />
+                      Delete
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -828,62 +657,65 @@ const Documents = () => {
           </div>
         )}
 
-        {/* View Document Dialog */}
+        {hasNextPage && documents.length > 0 && (
+          <div className="flex justify-center pt-8 pb-4">
+            <Button
+              variant="outline"
+              onClick={handleLoadMore}
+              disabled={isFetchingNextPage}
+              className="min-w-[150px]"
+            >
+              {isFetchingNextPage ? (
+                <>
+                  <div className="h-4 w-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-2" />
+                  Loading...
+                </>
+              ) : (
+                "Load More Documents"
+              )}
+            </Button>
+          </div>
+        )}
+
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
           <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-auto">
             {selectedDocument && (
               <>
                 <DialogHeader>
-                  <DialogTitle>{selectedDocument.name}</DialogTitle>
+                  <DialogTitle>{selectedDocument.type}</DialogTitle>
                   <DialogDescription>
-                    {selectedDocument.type} • Uploaded {formatDate(selectedDocument.uploaded_at)}
+                    {selectedDocument.name} • Uploaded on {formatDate(selectedDocument.uploaded_at)}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <p className="text-sm text-muted-foreground">Document Type</p>
-                      <p className="font-medium">{selectedDocument.type}</p>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-muted-foreground">File Type</p>
-                      <p className="font-medium">{selectedDocument.file_type}</p>
-                    </div>
-                  </div>
-                  <div className="border rounded-lg p-4 bg-secondary/50">
+                  <div className="border rounded-lg p-4 bg-secondary/50 flex items-center justify-center min-h-[400px]">
                     {selectedDocument.file_type.includes('image') ? (
                       <img
                         src={selectedDocument.file_url}
                         alt={selectedDocument.name}
-                        className="max-w-full h-auto rounded"
+                        className="max-w-full h-auto max-h-[600px] rounded shadow-sm"
                       />
                     ) : (
                       <iframe
                         src={selectedDocument.file_url}
-                        className="w-full h-96 rounded border"
+                        className="w-full h-[600px] rounded border shadow-sm"
                         title={selectedDocument.name}
                       />
                     )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 justify-end">
                     <Button
                       variant="outline"
                       onClick={() => handleDownload(selectedDocument)}
-                      className="flex-1"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download
                     </Button>
                     <Button
                       variant="outline"
-                      onClick={() => {
-                        setViewDialogOpen(false);
-                        handleDelete(selectedDocument.id);
-                      }}
-                      className="text-destructive hover:text-destructive"
+                      onClick={() => setViewDialogOpen(false)}
                     >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
+                      Close
                     </Button>
                   </div>
                 </div>

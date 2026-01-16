@@ -53,6 +53,60 @@ export type Database = {
         }
         Relationships: []
       }
+      bills: {
+        Row: {
+          id: string
+          created_at: string
+          uploaded_at: string
+          updated_at: string
+          user_id: string
+          bill_type: string
+          amount: number
+          due_date: string
+          frequency: string
+          file_url: string
+          paid: boolean
+          reminder_sent: boolean
+          file_name: string | null
+          file_type: string | null
+          file_path: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string
+          uploaded_at?: string
+          updated_at?: string
+          user_id: string
+          bill_type: string
+          amount: number
+          due_date: string
+          frequency: string
+          file_url: string
+          paid?: boolean
+          reminder_sent?: boolean
+          file_name?: string | null
+          file_type?: string | null
+          file_path?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string
+          uploaded_at?: string
+          updated_at?: string
+          user_id?: string
+          bill_type?: string
+          amount?: number
+          due_date?: string
+          frequency?: string
+          file_url?: string
+          paid?: boolean
+          reminder_sent?: boolean
+          file_name?: string | null
+          file_type?: string | null
+          file_path?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
