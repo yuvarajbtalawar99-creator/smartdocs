@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
-import { 
-  Receipt, 
-  Upload, 
-  Download, 
-  Eye, 
-  Trash2, 
-  Edit, 
+import {
+  Receipt,
+  Upload,
+  Download,
+  Eye,
+  Trash2,
+  Edit,
   Plus,
   Calendar,
   DollarSign,
@@ -40,6 +40,8 @@ interface Bill {
   user_id: string;
   paid: boolean;
   reminder_sent: boolean;
+  file_name?: string;
+  file_type?: string;
 }
 
 const BILL_TYPES = [
@@ -114,7 +116,7 @@ const Bills = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-      
+
       if (!validTypes.includes(file.type)) {
         toast({
           title: "Invalid file type",
@@ -155,7 +157,7 @@ const Bills = () => {
       const reader = new FileReader();
       reader.onloadend = async () => {
         const fileUrl = reader.result as string;
-        
+
         const newBill: Bill = {
           id: Date.now().toString(),
           bill_type: formData.bill_type,
@@ -168,6 +170,8 @@ const Bills = () => {
           user_id: user.id,
           paid: false,
           reminder_sent: false,
+          file_name: formData.file.name,
+          file_type: formData.file.type,
         };
 
         const updated = [...bills, newBill];
@@ -179,12 +183,12 @@ const Bills = () => {
           description: "Your bill has been stored and tracked.",
         });
 
-        setFormData({ 
-          bill_type: "", 
-          amount: "", 
-          due_date: new Date(), 
+        setFormData({
+          bill_type: "",
+          amount: "",
+          due_date: new Date(),
           frequency: "Monthly",
-          file: null 
+          file: null
         });
         setUploadDialogOpen(false);
       };
@@ -222,13 +226,41 @@ const Bills = () => {
     }
   };
 
-  const handleDownload = (bill: Bill) => {
-    const link = document.createElement('a');
-    link.href = bill.file_url;
-    link.download = `${bill.bill_type}_${format(new Date(bill.due_date), 'yyyy-MM-dd')}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (bill: Bill) => {
+    try {
+      // Determine file extension and name
+      let fileName = bill.file_name;
+
+      if (!fileName) {
+        // Fallback for existing data without file_name
+        const ext = bill.file_type?.includes('pdf') || bill.file_url.includes('application/pdf') ? 'pdf' :
+          bill.file_type?.includes('image') || bill.file_url.includes('image') ? 'jpg' : 'bin';
+
+        fileName = `${bill.bill_type}_${format(new Date(bill.due_date), 'yyyy-MM-dd')}.${ext}`;
+      }
+
+      // If it's a data URL, we can download directly but creating a blob is safer for large files
+      // If it's a remote URL, we must fetch it as blob
+      const response = await fetch(bill.file_url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName!;
+      document.body.appendChild(link);
+      link.click();
+
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Download error:", error);
+      toast({
+        title: "Download failed",
+        description: "Could not download the bill file.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleView = (bill: Bill) => {
@@ -241,7 +273,7 @@ const Bills = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const updated = bills.map(bill => 
+      const updated = bills.map(bill =>
         bill.id === id ? { ...bill, paid: true, updated_at: new Date().toISOString() } : bill
       );
       setBills(updated);
@@ -269,7 +301,7 @@ const Bills = () => {
 
   const getStatusBadge = (bill: Bill) => {
     const daysUntilDue = getDaysUntilDue(bill.due_date);
-    
+
     if (bill.paid) {
       return <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">Paid</Badge>;
     } else if (daysUntilDue < 0) {
@@ -322,8 +354,8 @@ const Bills = () => {
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
                     <Label htmlFor="bill-type">Bill Type *</Label>
-                    <Select 
-                      value={formData.bill_type} 
+                    <Select
+                      value={formData.bill_type}
                       onValueChange={(value) => setFormData({ ...formData, bill_type: value })}
                     >
                       <SelectTrigger>
@@ -372,8 +404,8 @@ const Bills = () => {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="frequency">Frequency *</Label>
-                    <Select 
-                      value={formData.frequency} 
+                    <Select
+                      value={formData.frequency}
                       onValueChange={(value) => setFormData({ ...formData, frequency: value })}
                     >
                       <SelectTrigger>
@@ -402,8 +434,8 @@ const Bills = () => {
                       </p>
                     )}
                   </div>
-                  <Button 
-                    onClick={handleUpload} 
+                  <Button
+                    onClick={handleUpload}
                     disabled={uploading || !formData.bill_type || !formData.amount || !formData.file}
                     className="w-full"
                   >
@@ -599,8 +631,8 @@ const Bills = () => {
                   </div>
                   <div className="border rounded-lg p-4 bg-secondary/50">
                     {selectedBill.file_url.includes('data:image') ? (
-                      <img 
-                        src={selectedBill.file_url} 
+                      <img
+                        src={selectedBill.file_url}
                         alt={selectedBill.bill_type}
                         className="max-w-full h-auto rounded"
                       />

@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
-import { 
-  FileText, 
-  Upload, 
-  Download, 
-  Eye, 
-  Trash2, 
-  Edit, 
+import {
+  FileText,
+  Upload,
+  Download,
+  Eye,
+  Trash2,
+  Edit,
   Plus,
   File,
   Image as ImageIcon,
@@ -95,7 +95,7 @@ const Documents = () => {
           id: doc.id,
           name: doc.name,
           type: doc.type,
-          file_url: doc.file_path.startsWith('http') ? doc.file_path : 
+          file_url: doc.file_path.startsWith('http') ? doc.file_path :
             `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/documents/${doc.file_path}`,
           file_type: doc.file_type,
           uploaded_at: doc.uploaded_at,
@@ -133,11 +133,11 @@ const Documents = () => {
         'application/vnd.ms-excel',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       ];
-      
+
       // Also allow wildcards for image types
       const isImage = file.type.startsWith('image/');
       const isValidType = validTypes.includes(file.type) || isImage;
-      
+
       if (!isValidType) {
         toast({
           title: "Invalid file type",
@@ -205,10 +205,10 @@ const Documents = () => {
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      console.log("Uploading to Supabase Storage...", { 
+      console.log("Uploading to Supabase Storage...", {
         bucket: 'documents',
-        filePath, 
-        fileName: formData.file.name, 
+        filePath,
+        fileName: formData.file.name,
         fileSize: formData.file.size,
         userId: user.id
       });
@@ -314,7 +314,7 @@ const Documents = () => {
           const urlParts = editingDocument.file_url.split('/storage/v1/object/public/documents/');
           if (urlParts.length > 1) {
             const oldFilePath = urlParts[1];
-            
+
             // Delete old file from Storage
             await supabase.storage
               .from('documents')
@@ -468,7 +468,7 @@ const Documents = () => {
         const urlParts = docToDelete.file_url.split('/storage/v1/object/public/documents/');
         if (urlParts.length > 1) {
           const filePath = urlParts[1];
-          
+
           // Delete from Storage
           const { error: storageError } = await supabase.storage
             .from('documents')
@@ -512,13 +512,29 @@ const Documents = () => {
     }
   };
 
-  const handleDownload = (doc: Document) => {
-    const link = document.createElement('a');
-    link.href = doc.file_url;
-    link.download = doc.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (doc: Document) => {
+    try {
+      setLoading(true);
+      const response = await fetch(doc.file_url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = doc.name; // Use the original file name
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast({
+        title: "Download failed",
+        description: "Could not download the file found.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleView = (doc: Document) => {
@@ -611,11 +627,11 @@ const Documents = () => {
                       </p>
                     )}
                   </div>
-                  <Button 
-                    onClick={handleUpload} 
+                  <Button
+                    onClick={handleUpload}
                     disabled={
-                      uploading || 
-                      !formData.type || 
+                      uploading ||
+                      !formData.type ||
                       !formData.file ||
                       (formData.type === "Other custom documents" && !formData.name)
                     }
@@ -687,8 +703,8 @@ const Documents = () => {
                   </p>
                 )}
               </div>
-              <Button 
-                onClick={handleUpdate} 
+              <Button
+                onClick={handleUpdate}
                 disabled={uploading || !formData.type}
                 className="w-full"
               >
@@ -836,8 +852,8 @@ const Documents = () => {
                   </div>
                   <div className="border rounded-lg p-4 bg-secondary/50">
                     {selectedDocument.file_type.includes('image') ? (
-                      <img 
-                        src={selectedDocument.file_url} 
+                      <img
+                        src={selectedDocument.file_url}
                         alt={selectedDocument.name}
                         className="max-w-full h-auto rounded"
                       />
