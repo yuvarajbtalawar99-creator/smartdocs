@@ -1,73 +1,128 @@
-# Welcome to your Lovable project
+# 📂 SmartDocs Hub
 
-## Project info
+> **SmartDocs Hub** is a secure, production-ready SaaS web application that acts as a **digital vault for personal documents** and an **intelligent bill management system**. It is designed with modern cloud architecture, strong security practices, and a polished user experience.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+---
 
-## How can I edit this code?
+## 🚀 Overview
 
-There are several ways of editing your application.
+SmartDocs Hub allows users to:
 
-**Use Lovable**
+* Securely upload, store, and manage important personal documents
+* Track recurring utility bills with intelligent due-date handling
+* Access files safely using time-limited secure links
+* Sync data seamlessly across devices using cloud storage
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+The project evolved from a simple prototype into a **scalable, real-world SaaS application**.
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## 🛠️ Technology Stack
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+| Layer                     | Technology                           |
+| ------------------------- | ------------------------------------ |
+| **Frontend**              | React 18 + Vite                      |
+| **Language**              | TypeScript (Strict Mode)             |
+| **Styling**               | Tailwind CSS + Lucide Icons          |
+| **UI Components**         | Radix UI + Shadcn UI                 |
+| **State & Data Fetching** | TanStack React Query (v5)            |
+| **Backend as a Service**  | Supabase (Auth, PostgreSQL, Storage) |
+| **Build & Deployment**    | Production-optimized Vite build      |
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## ✨ Core Features
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### 📄 Document Vault
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+* Secure cloud storage for personal documents
+* Supports multiple document types (Aadhaar, PAN, certificates, etc.)
+* In-browser preview for images and PDF files
+* Server-side pagination with infinite scrolling
+* Secure access via short-lived **Signed URLs**
 
-# Step 3: Install the necessary dependencies.
-npm i
+---
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+### 💸 Bill Management
 
-**Edit a file directly in GitHub**
+* Centralized tracking for utility and recurring bills
+* Automatic calculation of days remaining until due date
+* Intelligent status tagging: **Paid / Pending / Overdue**
+* Upload and store bill receipts permanently
+* Background data refresh to keep bill statuses accurate
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## 🧠 Architectural Evolution
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### 🔁 From Prototype to Production
 
-## What technologies are used for this project?
+#### Data Layer
 
-This project is built with:
+* **Before**: Browser `localStorage`
+* **After**: Supabase PostgreSQL with cloud sync and encryption
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+#### Data Fetching
 
-## How can I deploy this project?
+* **Before**: Manual `useEffect` calls
+* **After**: TanStack React Query with caching and background refresh
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+#### File Security
 
-## Can I connect a custom domain to my Lovable project?
+* **Before**: Public file URLs
+* **After**: Time-limited **Signed URLs** (60-second expiry)
 
-Yes, you can!
+#### UX Resilience
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+* Global error boundaries
+* Graceful empty states for new users
+* Retry mechanisms for network failures
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+---
+
+## 🔒 Security Model
+
+* **Row-Level Security (RLS)** ensures strict user data isolation
+* Each user can access only their own database records
+* Supabase Storage protected with RLS-based access rules
+* No public access to sensitive files
+
+---
+
+## 🗺️ Future Roadmap
+
+* 🔔 Automated email / push bill reminders using Supabase Edge Functions
+* 🧾 AI-powered OCR for bill data extraction
+* 📁 Custom folders and document organization
+* 📱 PWA offline support for document thumbnails
+* 📊 Audit logs and document access tracking
+
+---
+
+## ✅ Project Status
+
+* **Build**: Stable
+* **Security**: Enforced with RLS & Signed URLs
+* **Performance**: Optimized with caching & pagination
+* **Stage**: Production-ready
+
+---
+
+## 🧑‍💻 Developer Notes
+
+This project follows real-world SaaS best practices:
+
+* Stateless frontend architecture
+* Secure multi-tenant backend
+* Scalable cloud-first design
+* Clean, maintainable TypeScript codebase
+
+---
+
+## 📌 License
+
+This project is licensed under the **MIT License**.
+
+---
+
+⭐ If you like this project, consider giving it a star!
