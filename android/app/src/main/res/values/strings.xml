@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SmartDocs</string>
+    <string name="title_activity_main">SmartDocs</string>
+    <string name="package_name">com.smartdocs.app</string>
+    <string name="custom_url_scheme">com.smartdocs.app</string>
+</resources>
