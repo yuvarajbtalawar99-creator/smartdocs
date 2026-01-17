@@ -26,6 +26,7 @@ export type Database = {
           file_path: string
           file_type: string
           file_size: number
+          expiry_date: string | null
         }
         Insert: {
           id?: string
@@ -38,6 +39,7 @@ export type Database = {
           file_path: string
           file_type: string
           file_size: number
+          expiry_date?: string | null
         }
         Update: {
           id?: string
@@ -50,6 +52,7 @@ export type Database = {
           file_path?: string
           file_type?: string
           file_size?: number
+          expiry_date?: string | null
         }
         Relationships: []
       }

@@ -12,10 +12,25 @@ import {
   Sparkles,
   ChevronRight,
   Upload,
-  Calendar
+  Calendar,
+  AlertCircle
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
+} from "recharts";
 
 import { useUser } from "@/integrations/supabase/hooks/useUser";
 import { useDocuments } from "@/integrations/supabase/hooks/useDocuments";
@@ -35,6 +50,30 @@ const Dashboard = () => {
   // Calculate totals from cached data
   const documentCount = documentsData?.pages?.reduce((acc, page) => acc + page.length, 0) || 0;
   const billCount = billsData?.length || 0;
+
+  // Process data for charts
+  const monthlyStats = billsData ? Object.entries(
+    billsData.reduce((acc: any, bill) => {
+      const month = new Date(bill.due_date).toLocaleString('default', { month: 'short' });
+      acc[month] = (acc[month] || 0) + bill.amount;
+      return acc;
+    }, {})
+  ).map(([name, amount]) => ({ name, amount })) : [];
+
+  const categoryStats = billsData ? Object.entries(
+    billsData.reduce((acc: any, bill) => {
+      acc[bill.bill_type] = (acc[bill.bill_type] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([name, value]) => ({ name, value })) : [];
+
+  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+  const expiringSoon = documentsData?.pages?.flatMap(page => page)
+    .filter(doc => doc.expiry_date && new Date(doc.expiry_date) > new Date() &&
+      new Date(doc.expiry_date).getTime() - new Date().getTime() < 30 * 24 * 60 * 60 * 1000)
+    .sort((a, b) => new Date(a.expiry_date!).getTime() - new Date(b.expiry_date!).getTime())
+    .slice(0, 5) || [];
 
   if (userLoading || docsLoading || billsLoading) {
     return (
@@ -178,6 +217,164 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Analytics Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="overflow-hidden border-border bg-card shadow-lg hover:shadow-xl transition-all duration-300">
+            <CardHeader className="border-b border-border bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    Spending Trends
+                  </CardTitle>
+                  <CardDescription>Monthly bill expenditure</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="h-[300px] w-full">
+                {monthlyStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={monthlyStats}>
+                      <defs>
+                        <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#888888" opacity={0.1} />
+                      <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#888888', fontSize: 12 }}
+                        dy={10}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#888888', fontSize: 12 }}
+                        tickFormatter={(value) => `₹${value}`}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '12px',
+                          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
+                        }}
+                        itemStyle={{ color: '#10b981', fontWeight: 'bold' }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="amount"
+                        stroke="#10b981"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#colorAmount)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <TrendingUp className="h-12 w-12 opacity-20 mb-2" />
+                    <p>No bill data available for trends</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="overflow-hidden border-border bg-card shadow-lg hover:shadow-xl transition-all duration-300">
+            <CardHeader className="border-b border-border bg-muted/30">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-amber-500" />
+                  Bill Distribution
+                </CardTitle>
+                <CardDescription>Breakdown by category</CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="h-[300px] w-full">
+                {categoryStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={categoryStats}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {categoryStats.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '12px'
+                        }}
+                      />
+                      <Legend
+                        layout="vertical"
+                        align="right"
+                        verticalAlign="middle"
+                        iconType="circle"
+                        formatter={(value) => <span className="text-xs font-medium text-muted-foreground capitalize">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <Sparkles className="h-12 w-12 opacity-20 mb-2" />
+                    <p>No bill data available for distribution</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Upcoming Expirations */}
+        {expiringSoon.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+                Upcoming Expirations
+              </h2>
+              <Button variant="ghost" size="sm" onClick={() => navigate("/documents")} className="text-primary hover:text-primary/80">
+                View all documents <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {expiringSoon.map((doc) => (
+                <div
+                  key={doc.id}
+                  onClick={() => navigate("/documents")}
+                  className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card hover:border-amber-500/50 cursor-pointer transition-all group"
+                >
+                  <div className="p-3 rounded-lg bg-amber-500/10 text-amber-500 group-hover:bg-amber-500/20 transition-colors">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-sm text-foreground truncate">{doc.name}</h4>
+                    <p className="text-xs text-muted-foreground">Expires in {Math.ceil((new Date(doc.expiry_date!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days</p>
+                  </div>
+                  <div className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                    {new Date(doc.expiry_date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Quick Actions Section */}
         <div>

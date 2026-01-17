@@ -73,3 +73,7 @@ drop trigger if exists on_auth_user_created_security on auth.users;
 create trigger on_auth_user_created_security
   after insert on auth.users
   for each row execute function public.handle_new_user_security();
+
+-- Add expiry_date to documents table for launch readiness
+-- IMPORTANT: Run this manually in your Supabase SQL Editor if the table already exists
+alter table public.documents add column if not exists expiry_date timestamp with time zone;

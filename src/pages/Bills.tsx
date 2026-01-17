@@ -15,7 +15,8 @@ import {
   AlertCircle,
   CheckCircle2,
   FileText,
-  RefreshCcw
+  RefreshCcw,
+  Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +79,26 @@ const Bills = () => {
     due_date: new Date(),
     frequency: "Monthly",
     file: null as File | null,
+  });
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedType, setSelectedType] = useState("All");
+  const [selectedStatus, setSelectedStatus] = useState("All");
+
+  const filteredBills = bills.filter(bill => {
+    const matchesSearch = bill.bill_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (bill.file_name || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = selectedType === "All" || bill.bill_type === selectedType;
+
+    let matchesStatus = true;
+    if (selectedStatus === "Paid") matchesStatus = bill.paid;
+    if (selectedStatus === "Unpaid") matchesStatus = !bill.paid;
+    if (selectedStatus === "Overdue") {
+      const days = getDaysUntilDue(bill.due_date);
+      matchesStatus = !bill.paid && days < 0;
+    }
+
+    return matchesSearch && matchesType && matchesStatus;
   });
 
   const checkUpcomingBills = () => {
@@ -349,113 +370,150 @@ const Bills = () => {
                 Track your utility bills and never miss a payment
               </p>
             </div>
-            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Add Bill
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>Add New Bill</DialogTitle>
-                  <DialogDescription>
-                    Add a bill to track payments and receive reminders
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="bill-type">Bill Type *</Label>
-                    <Select
-                      value={formData.bill_type}
-                      onValueChange={(value) => setFormData({ ...formData, bill_type: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select bill type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BILL_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="amount">Bill Amount (₹) *</Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      placeholder="0.00"
-                      value={formData.amount}
-                      onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="due-date">Due Date *</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                        >
-                          <Calendar className="mr-2 h-4 w-4" />
-                          {formData.due_date ? format(formData.due_date, "PPP") : "Pick a date"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <CalendarComponent
-                          mode="single"
-                          selected={formData.due_date}
-                          onSelect={(date) => date && setFormData({ ...formData, due_date: date })}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="frequency">Frequency *</Label>
-                    <Select
-                      value={formData.frequency}
-                      onValueChange={(value) => setFormData({ ...formData, frequency: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FREQUENCIES.map((freq) => (
-                          <SelectItem key={freq} value={freq}>
-                            {freq}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="file">Bill File (PDF / Image) *</Label>
-                    <Input
-                      id="file"
-                      type="file"
-                      accept=".pdf,.png,.jpg,.jpeg"
-                      onChange={handleFileChange}
-                    />
-                    {formData.file && (
-                      <p className="text-sm text-muted-foreground">
-                        Selected: {formData.file.name}
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    onClick={handleUpload}
-                    disabled={uploading || !formData.bill_type || !formData.amount || !formData.file}
-                    className="w-full"
-                  >
-                    {uploading ? "Adding..." : "Add Bill"}
-                  </Button>
+            <div className="flex flex-wrap gap-2">
+              <div className="relative group">
+                <Input
+                  placeholder="Search bills..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-[180px] md:w-[250px] pl-9 h-10 bg-secondary/30 border-secondary focus:bg-card transition-all"
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
+                  <Search className="h-4 w-4" />
                 </div>
-              </DialogContent>
-            </Dialog>
+              </div>
+              <Select value={selectedType} onValueChange={setSelectedType}>
+                <SelectTrigger className="w-[140px] h-10 bg-secondary/30 border-secondary">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Categories</SelectItem>
+                  {BILL_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                <SelectTrigger className="w-[130px] h-10 bg-secondary/30 border-secondary">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Status</SelectItem>
+                  <SelectItem value="Paid">Paid</SelectItem>
+                  <SelectItem value="Unpaid">Unpaid</SelectItem>
+                  <SelectItem value="Overdue">Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2 h-10 shadow-lg shadow-primary/20">
+                    <Plus className="h-4 w-4" />
+                    Add Bill
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Bill</DialogTitle>
+                    <DialogDescription>
+                      Add a bill to track payments and receive reminders
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="bill-type">Bill Type *</Label>
+                      <Select
+                        value={formData.bill_type}
+                        onValueChange={(value) => setFormData({ ...formData, bill_type: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select bill type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BILL_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Bill Amount (₹) *</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        placeholder="0.00"
+                        value={formData.amount}
+                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="due-date">Due Date *</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            {formData.due_date ? format(formData.due_date, "PPP") : "Pick a date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <CalendarComponent
+                            mode="single"
+                            selected={formData.due_date}
+                            onSelect={(date) => date && setFormData({ ...formData, due_date: date })}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="frequency">Frequency *</Label>
+                      <Select
+                        value={formData.frequency}
+                        onValueChange={(value) => setFormData({ ...formData, frequency: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FREQUENCIES.map((freq) => (
+                            <SelectItem key={freq} value={freq}>
+                              {freq}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="file">Bill File (PDF / Image) *</Label>
+                      <Input
+                        id="file"
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        onChange={handleFileChange}
+                      />
+                      {formData.file && (
+                        <p className="text-sm text-muted-foreground">
+                          Selected: {formData.file.name}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      onClick={handleUpload}
+                      disabled={uploading || !formData.bill_type || !formData.amount || !formData.file}
+                      className="w-full"
+                    >
+                      {uploading ? "Adding..." : "Add Bill"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </div>
 
@@ -537,25 +595,24 @@ const Bills = () => {
               </Button>
             </CardContent>
           </Card>
-        ) : bills.length === 0 ? (
+        ) : filteredBills.length === 0 ? (
           <Card className="bg-secondary/20 border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <div className="p-4 bg-primary/10 rounded-full mb-6">
                 <Receipt className="h-12 w-12 text-primary" />
               </div>
-              <h3 className="text-xl font-bold mb-2">No bills tracked</h3>
+              <h3 className="text-xl font-bold mb-2">No bills match found</h3>
               <p className="text-muted-foreground mb-8 max-w-sm">
-                Track your utilities, rent, and other expenses in one place. Add your first bill to see how it works.
+                Try adjusting your search query or filters to find what you're looking for.
               </p>
-              <Button onClick={() => setUploadDialogOpen(true)} size="lg" className="px-8 shadow-lg shadow-primary/20">
-                <Plus className="h-5 w-5 mr-2" />
-                Add First Bill
+              <Button onClick={() => { setSearchQuery(""); setSelectedType("All"); setSelectedStatus("All"); }} variant="outline">
+                Clear all filters
               </Button>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-4">
-            {bills.map((bill) => {
+            {filteredBills.map((bill) => {
               const daysUntilDue = getDaysUntilDue(bill.due_date);
               return (
                 <Card key={bill.id} className="hover:border-primary/30 transition-colors">

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
 import { useUser } from "@/integrations/supabase/hooks/useUser";
+import { GlobalSearch } from "./GlobalSearch";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -161,6 +162,11 @@ const Layout = ({ children }: LayoutProps) => {
                 <p className="text-xs text-muted-foreground">Digital Vault</p>
               </div>
             </div>
+          </div>
+
+          {/* Global Search Component */}
+          <div className="px-6 py-2">
+            <GlobalSearch />
           </div>
 
           {/* Navigation */}

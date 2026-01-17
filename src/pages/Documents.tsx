@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { format } from "date-fns";
+import { motion, AnimatePresence } from "framer-motion";
 import Layout from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -14,7 +16,8 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   AlertCircle,
-  RefreshCcw
+  RefreshCcw,
+  Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +29,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDocuments } from "@/integrations/supabase/hooks/useDocuments";
 import { useDownload } from "@/integrations/supabase/hooks/useDownload";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format as formatBtn } from "date-fns";
+import { Calendar as CalendarIcon } from "lucide-react";
 
 interface Document {
   id: string;
@@ -37,6 +44,7 @@ interface Document {
   uploaded_at: string;
   updated_at: string;
   user_id: string;
+  expiry_date?: string;
 }
 
 const DOCUMENT_TYPES = [
@@ -76,6 +84,7 @@ const Documents = () => {
     uploaded_at: doc.uploaded_at,
     updated_at: doc.updated_at,
     user_id: doc.user_id,
+    expiry_date: doc.expiry_date,
   }))) || [];
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -90,6 +99,17 @@ const Documents = () => {
     name: "",
     type: "",
     file: null as File | null,
+    expiry_date: undefined as Date | undefined,
+  });
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedType, setSelectedType] = useState("All");
+
+  const filteredDocuments = documents.filter(doc => {
+    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.type.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = selectedType === "All" || doc.type === selectedType;
+    return matchesSearch && matchesType;
   });
 
   const handleLoadMore = () => {
@@ -131,7 +151,7 @@ const Documents = () => {
         return;
       }
 
-      setFormData({ ...formData, file, name: formData.name || file.name });
+      setFormData({ ...formData, file, name: formData.name || file.name, expiry_date: formData.expiry_date });
     }
   };
 
@@ -141,12 +161,13 @@ const Documents = () => {
       name: doc.name,
       type: doc.type,
       file: null,
+      expiry_date: doc.expiry_date ? new Date(doc.expiry_date) : undefined,
     });
     setEditDialogOpen(true);
   };
 
   const handleResetForm = () => {
-    setFormData({ name: "", type: "", file: null });
+    setFormData({ name: "", type: "", file: null, expiry_date: undefined });
     setEditingDocument(null);
   };
 
@@ -209,6 +230,7 @@ const Documents = () => {
           file_path: filePath,
           file_type: formData.file.type,
           file_size: formData.file.size,
+          expiry_date: formData.expiry_date ? formData.expiry_date.toISOString() : null,
         });
 
       if (dbError) {
@@ -224,7 +246,7 @@ const Documents = () => {
           title: "Uploaded Successfully",
           description: "Your document has been stored securely.",
         });
-        setFormData({ name: "", type: "", file: null });
+        setFormData({ name: "", type: "", file: null, expiry_date: undefined });
         setUploadDialogOpen(false);
         setEditingDocument(null);
       }
@@ -278,6 +300,7 @@ const Documents = () => {
             file_path: filePath,
             file_type: formData.file.type,
             file_size: formData.file.size,
+            expiry_date: formData.expiry_date ? formData.expiry_date.toISOString() : null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingDocument.id)
@@ -291,6 +314,7 @@ const Documents = () => {
           .update({
             name: formData.name,
             type: formData.type,
+            expiry_date: formData.expiry_date ? formData.expiry_date.toISOString() : null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingDocument.id)
@@ -305,7 +329,7 @@ const Documents = () => {
         description: "Your document details have been updated.",
       });
 
-      setFormData({ name: "", type: "", file: null });
+      setFormData({ name: "", type: "", file: null, expiry_date: undefined });
       setEditDialogOpen(false);
       setEditingDocument(null);
 
@@ -395,76 +419,124 @@ const Documents = () => {
                 Store and manage your important documents securely
               </p>
             </div>
-            <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Upload Document
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>Upload Document</DialogTitle>
-                  <DialogDescription>
-                    Upload your document. Supported formats: PDF, PNG, JPG, DOC, DOCX, XLS, XLSX
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="doc-type">Document Type</Label>
-                    <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select document type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DOCUMENT_TYPES.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {formData.type === "Other custom documents" && (
-                    <div className="space-y-2">
-                      <Label htmlFor="doc-name">Document Name *</Label>
-                      <Input
-                        id="doc-name"
-                        placeholder="Enter document name"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      />
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <Label htmlFor="file">File</Label>
-                    <Input
-                      id="file"
-                      type="file"
-                      accept="application/pdf,image/png,image/jpeg,image/jpg,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                      onChange={handleFileChange}
-                    />
-                    {formData.file && (
-                      <p className="text-sm text-muted-foreground">
-                        Selected: {formData.file.name} ({(formData.file.size / 1024 / 1024).toFixed(2)} MB)
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    onClick={handleUpload}
-                    disabled={
-                      uploading ||
-                      !formData.type ||
-                      !formData.file ||
-                      (formData.type === "Other custom documents" && !formData.name)
-                    }
-                    className="w-full"
-                  >
-                    {uploading ? "Uploading..." : "Upload Document"}
-                  </Button>
+            <div className="flex gap-2">
+              <div className="relative group">
+                <Input
+                  placeholder="Search documents..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-[200px] md:w-[300px] pl-9 h-10 bg-secondary/30 border-secondary focus:bg-card transition-all"
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
+                  <Search className="h-4 w-4" />
                 </div>
-              </DialogContent>
-            </Dialog>
+              </div>
+              <Select value={selectedType} onValueChange={setSelectedType}>
+                <SelectTrigger className="w-[150px] h-10 bg-secondary/30 border-secondary">
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Types</SelectItem>
+                  {DOCUMENT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gap-2 h-10 shadow-lg shadow-primary/20">
+                    <Plus className="h-4 w-4" />
+                    Upload Document
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Upload Document</DialogTitle>
+                    <DialogDescription>
+                      Upload your document. Supported formats: PDF, PNG, JPG, DOC, DOCX, XLS, XLSX
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="doc-type">Document Type</Label>
+                      <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select document type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DOCUMENT_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {formData.type === "Other custom documents" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="doc-name">Document Name *</Label>
+                        <Input
+                          id="doc-name"
+                          placeholder="Enter document name"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="file">File</Label>
+                      <Input
+                        id="file"
+                        type="file"
+                        accept="application/pdf,image/png,image/jpeg,image/jpg,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        onChange={handleFileChange}
+                      />
+                      {formData.file && (
+                        <p className="text-sm text-muted-foreground">
+                          Selected: {formData.file.name} ({(formData.file.size / 1024 / 1024).toFixed(2)} MB)
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="expiry-date">Expiry Date (Optional)</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start text-left font-normal"
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {formData.expiry_date ? format(formData.expiry_date, "PPP") : "Pick a date"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <CalendarComponent
+                            mode="single"
+                            selected={formData.expiry_date}
+                            onSelect={(date) => setFormData({ ...formData, expiry_date: date })}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <Button
+                      onClick={handleUpload}
+                      disabled={
+                        uploading ||
+                        !formData.type ||
+                        !formData.file ||
+                        (formData.type === "Other custom documents" && !formData.name)
+                      }
+                      className="w-full"
+                    >
+                      {uploading ? "Uploading..." : "Upload Document"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
         </div>
 
@@ -515,6 +587,28 @@ const Documents = () => {
                   onChange={handleFileChange}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-expiry-date">Expiry Date (Optional)</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {formData.expiry_date ? format(formData.expiry_date, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarComponent
+                      mode="single"
+                      selected={formData.expiry_date}
+                      onSelect={(date) => setFormData({ ...formData, expiry_date: date })}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
               <Button
                 onClick={handleUpdate}
                 disabled={uploading || !formData.type}
@@ -541,6 +635,7 @@ const Documents = () => {
                       name: "",
                       type: type,
                       file: null,
+                      expiry_date: undefined,
                     });
                     setUploadDialogOpen(true);
                   }}
@@ -571,89 +666,107 @@ const Documents = () => {
               </Button>
             </CardContent>
           </Card>
-        ) : documents.length === 0 ? (
+        ) : filteredDocuments.length === 0 ? (
           <Card className="bg-secondary/20 border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <div className="p-4 bg-primary/10 rounded-full mb-6">
                 <FileText className="h-12 w-12 text-primary" />
               </div>
-              <h3 className="text-xl font-bold mb-2">No documents found</h3>
+              <h3 className="text-xl font-bold mb-2">No documents matches found</h3>
               <p className="text-muted-foreground mb-8 max-w-sm">
-                Your secure vault is empty. Upload your first document to keep it safe and accessible.
+                Try adjusting your search query or filters to find what you're looking for.
               </p>
-              <Button onClick={() => setUploadDialogOpen(true)} size="lg" className="px-8 shadow-lg shadow-primary/20">
-                <Upload className="h-5 w-5 mr-2" />
-                Get Started
+              <Button onClick={() => { setSearchQuery(""); setSelectedType("All"); }} variant="outline">
+                Clear all filters
               </Button>
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {documents.map((doc) => (
-              <Card key={doc.id} className="hover:border-primary/30 transition-colors">
-                <CardHeader>
-                  <div className="flex items-start gap-3">
-                    {getFileIcon(doc.file_type)}
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg font-semibold mb-2">{doc.type}</CardTitle>
-                      <CardDescription className="text-sm text-muted-foreground truncate">
-                        {doc.name}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex justify-between items-center text-sm text-muted-foreground mb-4">
-                    <span>{formatDate(doc.uploaded_at)}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleView(doc)}
-                    >
-                      <Eye className="h-3 w-3 mr-2" />
-                      View
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleDownload(doc)}
-                      disabled={fileDownloading === doc.file_path}
-                    >
-                      {fileDownloading === doc.file_path ? (
-                        <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-2" />
-                      ) : (
-                        <Download className="h-3 w-3 mr-2" />
-                      )}
-                      {fileDownloading === doc.file_path ? "..." : "Download"}
-                    </Button>
-                  </div>
-                  <div className="flex gap-2 mt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleEdit(doc)}
-                    >
-                      <Edit className="h-3 w-3 mr-2" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 text-destructive hover:text-destructive"
-                      onClick={() => handleDelete(doc.id)}
-                    >
-                      <Trash2 className="h-3 w-3 mr-2" />
-                      Delete
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            <AnimatePresence>
+              {filteredDocuments.map((doc, index) => (
+                <motion.div
+                  key={doc.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                >
+                  <Card className="hover:border-primary/30 transition-colors h-full">
+                    <CardHeader>
+                      <div className="flex items-start gap-3">
+                        {getFileIcon(doc.file_type)}
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-lg font-semibold mb-2">{doc.type}</CardTitle>
+                          <CardDescription className="text-sm text-muted-foreground truncate">
+                            {doc.name}
+                          </CardDescription>
+                          {doc.expiry_date && (
+                            <div className={`mt-2 text-xs font-medium inline-flex items-center px-2 py-0.5 rounded-full ${new Date(doc.expiry_date) < new Date()
+                              ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                              }`}>
+                              <CalendarIcon className="h-3 w-3 mr-1" />
+                              Expires: {format(new Date(doc.expiry_date), 'MMM dd, yyyy')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex justify-between items-center text-sm text-muted-foreground mb-4">
+                        <span>{formatDate(doc.uploaded_at)}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleView(doc)}
+                        >
+                          <Eye className="h-3 w-3 mr-2" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleDownload(doc)}
+                          disabled={fileDownloading === doc.file_path}
+                        >
+                          {fileDownloading === doc.file_path ? (
+                            <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-2" />
+                          ) : (
+                            <Download className="h-3 w-3 mr-2" />
+                          )}
+                          {fileDownloading === doc.file_path ? "..." : "Download"}
+                        </Button>
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleEdit(doc)}
+                        >
+                          <Edit className="h-3 w-3 mr-2" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-destructive hover:text-destructive"
+                          onClick={() => handleDelete(doc.id)}
+                        >
+                          <Trash2 className="h-3 w-3 mr-2" />
+                          Delete
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         )}
 
