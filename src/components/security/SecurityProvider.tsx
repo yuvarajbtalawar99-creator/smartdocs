@@ -125,6 +125,14 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
     };
 
+    if (isLoading) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center bg-slate-950">
+                <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            </div>
+        );
+    }
+
     return (
         <SecurityContext.Provider
             value={{
@@ -138,8 +146,8 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 setBiometricsEnabled,
             }}
         >
-            {isLocked && !isLoading && <LockScreen />}
-            <div className={isLocked && !isLoading ? "blur-sm pointer-events-none select-none transition-all duration-500" : "transition-all duration-500"}>
+            {isLocked && <LockScreen />}
+            <div className={isLocked ? "blur-sm pointer-events-none select-none transition-all duration-500" : "transition-all duration-500"}>
                 {children}
             </div>
         </SecurityContext.Provider>

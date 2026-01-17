@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
-import { User as UserIcon, Mail, Lock, Camera, Save, LogOut, X } from "lucide-react";
+import { User as UserIcon, Mail, Lock, Camera, Save, LogOut, X, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,6 @@ import {
   InputOTPGroup,
   InputOTPSlot
 } from "@/components/ui/input-otp";
-import { ShieldCheck, Mail } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -33,7 +32,6 @@ const Profile = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
-
   const [profileData, setProfileData] = useState({
     full_name: "",
     email: "",
@@ -213,6 +211,68 @@ const Profile = () => {
       description: "You have been signed out successfully.",
     });
     navigate("/auth");
+  };
+
+  const handleSendVerificationCode = async () => {
+    if (!user?.email) return;
+
+    // Generate a 6-digit random code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedCode(code);
+
+    try {
+      const { error } = await supabase.functions.invoke('send-notification-email', {
+        body: {
+          type: 'verification',
+          email: user.email,
+          name: profileData.full_name,
+          code: code
+        }
+      });
+
+      if (error) throw error;
+
+      setIsVerifying(true);
+      toast({
+        title: "Verification Code Sent",
+        description: `We've sent a 6-digit code to ${user.email}`,
+      });
+    } catch (err) {
+      console.error("Error sending verification code:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to send verification code. Please try again.",
+      });
+    }
+  };
+
+  const handleVerifyAndSave = async () => {
+    if (verificationCode === generatedCode) {
+      try {
+        await setPin(newPin);
+        setIsSettingPin(false);
+        setIsVerifying(false);
+        setNewPin("");
+        setVerificationCode("");
+        toast({
+          title: "PIN Set Successfully",
+          description: "Your digital vault is now secured and synced to the cloud.",
+        });
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to save PIN. Please try again.",
+        });
+      }
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Invalid Code",
+        description: "The verification code you entered is incorrect.",
+      });
+    }
   };
 
   if (userLoading) {
