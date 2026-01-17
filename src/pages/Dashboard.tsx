@@ -20,62 +20,35 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
+import { useDocuments } from "@/integrations/supabase/hooks/useDocuments";
+import { useBills } from "@/integrations/supabase/hooks/useBills";
+import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
+
 const Dashboard = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+  // Use cached data hooks
+  const { data: documentsData, isLoading: docsLoading } = useDocuments();
+  const { data: billsData, isLoading: billsLoading } = useBills();
 
-      if (!session?.user) {
-        navigate("/auth");
-      }
-    });
+  // Calculate totals from cached data
+  const documentCount = documentsData?.pages?.reduce((acc, page) => acc + page.length, 0) || 0;
+  const billCount = billsData?.length || 0;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-
-      if (!session?.user) {
-        navigate("/auth");
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+  // Let Layout.tsx handle the session monitoring, we just get the current user for display
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const loadCounts = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Fetch document count from Supabase
-      const { count } = await supabase
-        .from('documents')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id);
-
-      setDocumentCount(count || 0);
-
-      // Bills are currently stored in localStorage (client-side only feature for now)
-      const bills = localStorage.getItem(`bills_${user.id}`);
-      setBillCount(bills ? JSON.parse(bills).length : 0);
-    };
-
-    loadCounts();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
   }, []);
 
-  const [documentCount, setDocumentCount] = useState(0);
-  const [billCount, setBillCount] = useState(0);
-
-  if (loading) {
+  if (docsLoading || billsLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
+      <Layout>
+        <DashboardSkeleton />
+      </Layout>
     );
   }
 
