@@ -3,12 +3,17 @@ import { supabase } from "../client";
 
 const PAGE_SIZE = 20;
 
-export const useDocuments = () => {
+export const useDocuments = (userId?: string) => {
     return useInfiniteQuery({
-        queryKey: ['documents'],
+        queryKey: ['documents', userId],
         queryFn: async ({ pageParam = 0 }) => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("No user");
+            let targetUserId = userId;
+
+            if (!targetUserId) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) throw new Error("No user");
+                targetUserId = user.id;
+            }
 
             const from = pageParam * PAGE_SIZE;
             const to = (pageParam + 1) * PAGE_SIZE - 1;
@@ -16,7 +21,7 @@ export const useDocuments = () => {
             const { data, error } = await supabase
                 .from('documents')
                 .select('*')
-                .eq('user_id', user.id)
+                .eq('user_id', targetUserId)
                 .order('uploaded_at', { ascending: false })
                 .range(from, to);
 

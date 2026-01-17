@@ -1,9 +1,6 @@
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import Layout from "@/components/Layout";
-import { supabase } from "@/integrations/supabase/client";
-import { User } from "@supabase/supabase-js";
 import {
   FileText,
   Receipt,
@@ -20,6 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
+import { useUser } from "@/integrations/supabase/hooks/useUser";
 import { useDocuments } from "@/integrations/supabase/hooks/useDocuments";
 import { useBills } from "@/integrations/supabase/hooks/useBills";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
@@ -27,24 +25,18 @@ import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  // Use cached data hooks
-  const { data: documentsData, isLoading: docsLoading } = useDocuments();
-  const { data: billsData, isLoading: billsLoading } = useBills();
+  // Use centralized user hook
+  const { data: user, isLoading: userLoading } = useUser();
+
+  // Use cached data hooks with the user ID
+  const { data: documentsData, isLoading: docsLoading } = useDocuments(user?.id);
+  const { data: billsData, isLoading: billsLoading } = useBills(user?.id);
 
   // Calculate totals from cached data
   const documentCount = documentsData?.pages?.reduce((acc, page) => acc + page.length, 0) || 0;
   const billCount = billsData?.length || 0;
 
-  // Let Layout.tsx handle the session monitoring, we just get the current user for display
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
-  }, []);
-
-  if (docsLoading || billsLoading) {
+  if (userLoading || docsLoading || billsLoading) {
     return (
       <Layout>
         <DashboardSkeleton />

@@ -18,13 +18,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "next-themes";
+import { useUser } from "@/integrations/supabase/hooks/useUser";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 const Layout = ({ children }: LayoutProps) => {
-  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
@@ -39,19 +39,19 @@ const Layout = ({ children }: LayoutProps) => {
     setMounted(true);
   }, []);
 
+  const { data: userObject, isLoading: userLoading } = useUser();
+  const user = userObject ?? null;
+
   useEffect(() => {
-    // Initial session check
+    // Initial session check for redirection
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (mounted) {
-          setUser(session?.user ?? null);
           setLoading(false);
 
           if (!session?.user && location.pathname !== "/auth") {
             navigate("/auth");
-          } else if (session?.user) {
-            loadNotificationCount();
           }
         }
       } catch (error) {
@@ -64,13 +64,10 @@ const Layout = ({ children }: LayoutProps) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted) {
-        setUser(session?.user ?? null);
         setLoading(false);
 
         if (event === 'SIGNED_OUT') {
           navigate("/auth");
-        } else if (session?.user) {
-          loadNotificationCount();
         }
       }
     });
@@ -80,21 +77,17 @@ const Layout = ({ children }: LayoutProps) => {
 
   useEffect(() => {
     if (user) {
-      loadNotificationCount();
-      // Refresh notification count every 30 seconds
+      loadNotificationCount(user.id);
       const interval = setInterval(() => {
-        loadNotificationCount();
+        loadNotificationCount(user.id);
       }, 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
 
-  const loadNotificationCount = async () => {
+  const loadNotificationCount = async (userId: string) => {
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) return;
-
-      const stored = localStorage.getItem(`notifications_${currentUser.id}`);
+      const stored = localStorage.getItem(`notifications_${userId}`);
       if (stored) {
         const notifications = JSON.parse(stored);
         const unread = notifications.filter((n: any) => !n.read).length;
@@ -181,7 +174,7 @@ const Layout = ({ children }: LayoutProps) => {
                       navigate(item.path);
                       setSidebarOpen(false);
                       if (item.path === "/notifications") {
-                        loadNotificationCount();
+                        if (user) loadNotificationCount(user.id);
                       }
                     }}
                     className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 relative group ${isActive(item.path)
@@ -268,7 +261,7 @@ const Layout = ({ children }: LayoutProps) => {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">
-                  {user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User"}
+                  {user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split("@")[0] || "User"}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
                   {user?.email}

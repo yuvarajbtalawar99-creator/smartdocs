@@ -1,17 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "../client";
 
-export const useBills = () => {
+export const useBills = (userId?: string) => {
     return useQuery({
-        queryKey: ['bills'],
+        queryKey: ['bills', userId],
         queryFn: async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("No user");
+            let targetUserId = userId;
+
+            if (!targetUserId) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) throw new Error("No user");
+                targetUserId = user.id;
+            }
 
             const { data, error } = await supabase
                 .from('bills')
                 .select('*')
-                .eq('user_id', user.id)
+                .eq('user_id', targetUserId)
                 .order('due_date', { ascending: true });
 
             if (error) throw error;
