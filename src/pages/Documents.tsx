@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import Layout from "@/components/Layout";
@@ -72,6 +72,7 @@ const Documents = () => {
     isError
   } = useDocuments();
   const { downloadFile, downloading: fileDownloading } = useDownload();
+  const [offlineStatus, setOfflineStatus] = useState<Record<string, boolean>>({});
 
   const documents = data?.pages.flatMap(page => page.map(doc => ({
     id: doc.id,
@@ -86,6 +87,23 @@ const Documents = () => {
     user_id: doc.user_id,
     expiry_date: doc.expiry_date,
   }))) || [];
+
+  // Check offline status for all documents
+  useEffect(() => {
+    const checkOfflineStatus = async () => {
+      const status: Record<string, boolean> = {};
+      const { isFileCached } = await import("@/lib/offline-storage");
+
+      for (const doc of documents) {
+        status[doc.id] = await isFileCached('documents', doc.file_path);
+      }
+      setOfflineStatus(status);
+    };
+
+    if (documents.length > 0) {
+      checkOfflineStatus();
+    }
+  }, [documents.length]);
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -385,9 +403,13 @@ const Documents = () => {
     await downloadFile('documents', doc.file_path, doc.name);
   };
 
-  const handleView = (doc: Document) => {
-    setSelectedDocument(doc);
-    setViewDialogOpen(true);
+  const handleView = async (doc: Document) => {
+    if (doc.file_url.startsWith('http') && !doc.file_url.includes('storage/v1/object/public')) {
+      window.open(doc.file_url, '_blank');
+      return;
+    }
+
+    await downloadFile('documents', doc.file_path, doc.name, true);
   };
 
   const getFileIcon = (fileType: string) => {
@@ -697,7 +719,14 @@ const Documents = () => {
                       <div className="flex items-start gap-3">
                         {getFileIcon(doc.file_type)}
                         <div className="flex-1 min-w-0">
-                          <CardTitle className="text-lg font-semibold mb-2">{doc.type}</CardTitle>
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-lg font-semibold mb-2">{doc.type}</CardTitle>
+                            {offlineStatus[doc.id] && (
+                              <div className="mb-2 text-green-500" title="Available offline">
+                                <CheckCircle2 className="h-4 w-4" />
+                              </div>
+                            )}
+                          </div>
                           <CardDescription className="text-sm text-muted-foreground truncate">
                             {doc.name}
                           </CardDescription>

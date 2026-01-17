@@ -67,6 +67,7 @@ const Bills = () => {
   const queryClient = useQueryClient();
   const { data: bills = [], isLoading, isError } = useBills();
   const { downloadFile, downloading: fileDownloading } = useDownload();
+  const [offlineStatus, setOfflineStatus] = useState<Record<string, boolean>>({});
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
@@ -120,8 +121,21 @@ const Bills = () => {
   useEffect(() => {
     if (bills.length > 0) {
       checkUpcomingBills();
+
+      const checkOfflineStatus = async () => {
+        const status: Record<string, boolean> = {};
+        const { isFileCached } = await import("@/lib/offline-storage");
+
+        for (const bill of bills) {
+          if (bill.file_path) {
+            status[bill.id] = await isFileCached('documents', bill.file_path);
+          }
+        }
+        setOfflineStatus(status);
+      };
+      checkOfflineStatus();
     }
-  }, [bills]);
+  }, [bills.length]);
 
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,9 +305,19 @@ const Bills = () => {
     await downloadFile('documents', bill.file_path, fileName);
   };
 
-  const handleView = (bill: Bill) => {
-    setSelectedBill(bill);
-    setViewDialogOpen(true);
+  const handleView = async (bill: Bill) => {
+    if (!bill.file_path) {
+      window.open(bill.file_url, '_blank');
+      return;
+    }
+
+    let fileName = bill.file_name;
+    if (!fileName) {
+      const ext = bill.file_type?.includes('pdf') ? 'pdf' : 'jpg';
+      fileName = `${bill.bill_type}_${format(new Date(bill.due_date), 'yyyy-MM-dd')}.${ext}`;
+    }
+
+    await downloadFile('documents', bill.file_path, fileName, true);
   };
 
   const markAsPaid = async (id: string) => {
@@ -622,6 +646,11 @@ const Bills = () => {
                         <div className="flex items-center gap-3 mb-2">
                           <Receipt className="h-5 w-5 text-primary" />
                           <CardTitle className="text-lg">{bill.bill_type}</CardTitle>
+                          {offlineStatus[bill.id] && (
+                            <div className="text-green-500" title="Available offline">
+                              <CheckCircle2 className="h-4 w-4" />
+                            </div>
+                          )}
                           {getStatusBadge(bill)}
                         </div>
                         <CardDescription>
