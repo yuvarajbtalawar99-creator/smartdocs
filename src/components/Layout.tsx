@@ -150,8 +150,8 @@ const Layout = ({ children }: LayoutProps) => {
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="absolute inset-0 bg-gradient-to-br from-primary to-emerald-400 rounded-xl blur opacity-50" />
-                <div className="relative bg-gradient-to-br from-primary to-emerald-500 p-2.5 rounded-xl shadow-lg">
-                  <FileText className="h-6 w-6 text-white" />
+                <div className="relative bg-gradient-to-br from-primary/10 to-emerald-500/10 p-2 rounded-xl border border-primary/20 shadow-lg">
+                  <img src="/logo.png" alt="SmartDocs Logo" className="h-7 w-7 object-contain" />
                 </div>
               </div>
               <div>

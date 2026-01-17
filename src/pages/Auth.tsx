@@ -357,8 +357,8 @@ const AuthPage = () => {
             <Link to="/" className="flex items-center gap-2">
               <div className="relative">
                 <div className="absolute inset-0 bg-primary/20 rounded-lg blur-lg" />
-                <div className="relative bg-primary/10 p-3 rounded-xl border border-primary/20">
-                  <FileText className="h-8 w-8 text-primary" />
+                <div className="relative bg-white p-2 rounded-xl border border-primary/20 shadow-xl overflow-hidden">
+                  <img src="/logo.png" alt="SmartDocs Logo" className="h-10 w-10 object-contain" />
                 </div>
               </div>
             </Link>
@@ -675,8 +675,8 @@ const AuthPage = () => {
               <div className="flex items-center gap-4 mb-6 pb-4 border-b border-white/10">
                 <div className="relative">
                   <div className="absolute inset-0 bg-gradient-to-br from-primary to-cyan-400 rounded-xl blur animate-pulse" />
-                  <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-lg">
-                    <FileText className="h-7 w-7 text-white" />
+                  <div className="relative w-14 h-14 rounded-xl bg-white flex items-center justify-center shadow-lg overflow-hidden border border-white/10">
+                    <img src="/logo.png" alt="SmartDocs" className="h-10 w-10 object-contain" />
                   </div>
                 </div>
                 <div className="text-left">
