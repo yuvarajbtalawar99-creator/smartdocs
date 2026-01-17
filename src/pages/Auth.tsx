@@ -45,19 +45,25 @@ const AuthPage = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (mounted && session?.user) {
-          // If already on /auth but have a session, go to dashboard
           navigate("/dashboard");
         }
       } catch (error) {
-        // Silently fail - user can still use the page
         console.error("Session check error:", error);
       }
     };
 
     checkSession();
 
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (mounted && session?.user) {
+        navigate("/dashboard");
+      }
+    });
+
     return () => {
       mounted = false;
+      subscription.unsubscribe();
     };
   }, [navigate]);
 
