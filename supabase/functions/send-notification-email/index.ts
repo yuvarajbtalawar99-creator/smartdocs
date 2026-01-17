@@ -7,26 +7,48 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")
 Deno.serve(async (req: Request) => {
   console.log("Send-notification-email function invoked")
   try {
-    const body = await req.json()
-    console.log("Request body:", JSON.stringify(body))
-    const { type, email } = body
+    const { type, email, name, code } = await req.json()
+    console.log(`Sending ${type} email to ${email}`)
 
-    if (!type || !email) {
+    let subject = ""
+    let html = ""
+
+    if (type === 'welcome') {
+      subject = "Welcome to SmartDocs Hub!"
+      html = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+          <h1 style="color: #00BA88;">Welcome, ${name || 'User'}!</h1>
+          <p>We're excited to help you manage your digital vault securely.</p>
+          <p>Get started by uploading your first document or setting up your 6-digit PIN for extra security.</p>
+          <br />
+          <p>Best regards,<br />The SmartDocs Team</p>
+        </div>
+      `
+    } else if (type === 'verification') {
+      subject = `${code} is your SmartDocs security code`
+      html = `
+        <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px; text-align: center;">
+          <h1 style="color: #00BA88;">Security Verification</h1>
+          <p>You requested a change to your Vault PIN. Please use the 6-digit code below to confirm:</p>
+          <div style="font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 30px 0; color: #1a1a1a;">${code}</div>
+          <p style="color: #666; font-size: 14px;">If you didn't request this, please ignore this email or contact support.</p>
+          <br />
+          <p>Best regards,<br />The SmartDocs Team</p>
+        </div>
+      `
+    } else {
       return new Response(
-        JSON.stringify({ error: "Missing type or email" }),
+        JSON.stringify({ error: "Invalid email type provided" }),
         { status: 400 }
       )
     }
 
-    const subject =
-      type === "welcome"
-        ? "Welcome to SmartDocs Hub"
-        : "New Login Alert"
-
-    const html =
-      type === "welcome"
-        ? `<h2>Welcome to SmartDocs Hub 👋</h2><p>Your digital documents are now secure.</p>`
-        : `<h2>Login Alert 🔐</h2><p>A new login was detected for your account.</p>`
+    if (!email) {
+      return new Response(
+        JSON.stringify({ error: "Missing email address" }),
+        { status: 400 }
+      )
+    }
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",

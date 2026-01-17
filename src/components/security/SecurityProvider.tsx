@@ -1,15 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useUser } from "@/integrations/supabase/hooks/useUser";
 import LockScreen from "./LockScreen";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SecurityContextType {
     isLocked: boolean;
+    isLoading: boolean;
     lock: () => void;
     unlock: (pin: string) => boolean;
     hasPin: boolean;
-    setPin: (pin: string) => void;
+    setPin: (pin: string) => Promise<void>;
     isBiometricsEnabled: boolean;
-    setBiometricsEnabled: (enabled: boolean) => void;
+    setBiometricsEnabled: (enabled: boolean) => Promise<void>;
 }
 
 const SecurityContext = createContext<SecurityContextType | undefined>(undefined);
@@ -17,26 +19,45 @@ const SecurityContext = createContext<SecurityContextType | undefined>(undefined
 export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { data: user } = useUser();
     const [isLocked, setIsLocked] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [hasPin, setHasPin] = useState(false);
     const [isBiometricsEnabled, setIsBiometricsEnabled] = useState(false);
+    const [dbPinHash, setDbPinHash] = useState<string | null>(null);
 
     useEffect(() => {
-        // Check if PIN exists in localStorage for this user
-        if (user) {
-            const savedPin = localStorage.getItem(`sd_pin_${user.id}`);
-            const bioEnabled = localStorage.getItem(`sd_bio_${user.id}`) === "true";
+        const fetchSecuritySettings = async () => {
+            if (user) {
+                try {
+                    const { data, error } = await supabase
+                        .from('user_security')
+                        .select('pin_hash, biometrics_enabled')
+                        .eq('user_id', user.id)
+                        .maybeSingle();
 
-            // Check if already unlocked in this specific browser session
-            const isUnlockedInSession = sessionStorage.getItem(`sd_unlocked_${user.id}`) === "true";
+                    if (error) throw error;
 
-            setHasPin(!!savedPin);
-            setIsBiometricsEnabled(bioEnabled);
+                    if (data) {
+                        setDbPinHash(data.pin_hash);
+                        setHasPin(!!data.pin_hash);
+                        setIsBiometricsEnabled(data.biometrics_enabled);
 
-            // Lock the app if a PIN is set AND it hasn't been unlocked in this session yet
-            if (savedPin && !isUnlockedInSession) {
-                setIsLocked(true);
+                        // Check session-based lock
+                        const isUnlockedInSession = sessionStorage.getItem(`sd_unlocked_${user.id}`) === "true";
+                        if (data.pin_hash && !isUnlockedInSession) {
+                            setIsLocked(true);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error fetching security settings:", err);
+                } finally {
+                    setIsLoading(false);
+                }
+            } else {
+                setIsLoading(false);
             }
-        }
+        };
+
+        fetchSecuritySettings();
     }, [user]);
 
     const lock = () => {
@@ -47,10 +68,9 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const unlock = (pin: string): boolean => {
-        if (!user) return false;
-        const savedPin = localStorage.getItem(`sd_pin_${user.id}`);
-        if (pin === savedPin) {
-            // Mark as unlocked for this session
+        if (!user || !dbPinHash) return false;
+        // Simple comparison for now - in production use a better hashing strategy
+        if (pin === dbPinHash) {
             sessionStorage.setItem(`sd_unlocked_${user.id}`, "true");
             setIsLocked(false);
             return true;
@@ -58,31 +78,58 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return false;
     };
 
-    const setPin = (pin: string) => {
+    const setPin = async (pin: string) => {
         if (!user) return;
-        if (pin) {
-            localStorage.setItem(`sd_pin_${user.id}`, pin);
-            // After setting a new PIN, we consider it unlocked for this session
-            sessionStorage.setItem(`sd_unlocked_${user.id}`, "true");
-            setHasPin(true);
-        } else {
-            localStorage.removeItem(`sd_pin_${user.id}`);
-            sessionStorage.removeItem(`sd_unlocked_${user.id}`);
-            setHasPin(false);
-            setIsLocked(false);
+        try {
+            const { error } = await supabase
+                .from('user_security')
+                .update({
+                    pin_hash: pin || null,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('user_id', user.id);
+
+            if (error) throw error;
+
+            setDbPinHash(pin || null);
+            setHasPin(!!pin);
+
+            if (pin) {
+                sessionStorage.setItem(`sd_unlocked_${user.id}`, "true");
+            } else {
+                sessionStorage.removeItem(`sd_unlocked_${user.id}`);
+                setIsLocked(false);
+            }
+        } catch (err) {
+            console.error("Error setting pin:", err);
+            throw err;
         }
     };
 
-    const setBiometricsEnabled = (enabled: boolean) => {
+    const setBiometricsEnabled = async (enabled: boolean) => {
         if (!user) return;
-        localStorage.setItem(`sd_bio_${user.id}`, String(enabled));
-        setIsBiometricsEnabled(enabled);
+        try {
+            const { error } = await supabase
+                .from('user_security')
+                .update({
+                    biometrics_enabled: enabled,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('user_id', user.id);
+
+            if (error) throw error;
+            setIsBiometricsEnabled(enabled);
+        } catch (err) {
+            console.error("Error setting biometrics:", err);
+            throw err;
+        }
     };
 
     return (
         <SecurityContext.Provider
             value={{
                 isLocked,
+                isLoading,
                 lock,
                 unlock,
                 hasPin,
@@ -91,8 +138,8 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 setBiometricsEnabled,
             }}
         >
-            {isLocked && <LockScreen />}
-            <div className={isLocked ? "blur-sm pointer-events-none select-none transition-all duration-500" : "transition-all duration-500"}>
+            {isLocked && !isLoading && <LockScreen />}
+            <div className={isLocked && !isLoading ? "blur-sm pointer-events-none select-none transition-all duration-500" : "transition-all duration-500"}>
                 {children}
             </div>
         </SecurityContext.Provider>

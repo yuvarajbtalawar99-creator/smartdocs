@@ -31,3 +31,45 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row
 execute function public.send_welcome_email();
+
+-- Create user_security table
+create table if not exists public.user_security (
+  user_id uuid references auth.users on delete cascade primary key,
+  pin_hash text,
+  biometrics_enabled boolean default false,
+  updated_at timestamp with time zone default now()
+);
+
+-- Enable RLS
+alter table public.user_security enable row level security;
+
+-- Policies
+create policy "Users can view their own security settings"
+  on public.user_security for select
+  using (auth.uid() = user_id);
+
+create policy "Users can update their own security settings"
+  on public.user_security for update
+  using (auth.uid() = user_id);
+
+create policy "Users can insert their own security settings"
+  on public.user_security for insert
+  with check (auth.uid() = user_id);
+
+-- Trigger to create security row on signup
+create or replace function public.handle_new_user_security()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  insert into public.user_security (user_id)
+  values (new.id);
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_security on auth.users;
+create trigger on_auth_user_created_security
+  after insert on auth.users
+  for each row execute function public.handle_new_user_security();

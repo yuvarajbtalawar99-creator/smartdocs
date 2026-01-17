@@ -18,7 +18,7 @@ import {
   InputOTPGroup,
   InputOTPSlot
 } from "@/components/ui/input-otp";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Mail } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -30,6 +30,9 @@ const Profile = () => {
   const [changingPassword, setChangingPassword] = useState(false);
   const [isSettingPin, setIsSettingPin] = useState(false);
   const [newPin, setNewPin] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [generatedCode, setGeneratedCode] = useState("");
 
   const [profileData, setProfileData] = useState({
     full_name: "",
@@ -427,15 +430,22 @@ const Profile = () => {
               </div>
               <Switch
                 checked={hasPin}
-                onCheckedChange={(checked) => {
+                onCheckedChange={async (checked) => {
                   if (!checked) {
-                    setPin("");
-                    toast({
-                      title: "PIN Disabled",
-                      description: "Your digital vault is no longer protected by a PIN.",
-                    });
+                    try {
+                      await setPin("");
+                      toast({
+                        title: "PIN Disabled",
+                        description: "Your digital vault is no longer protected by a PIN.",
+                      });
+                    } catch (err) {
+                      toast({
+                        variant: "destructive",
+                        title: "Error",
+                        description: "Failed to disable PIN.",
+                      });
+                    }
                   } else {
-                    // This will be handled by the PIN entry UI
                     setIsSettingPin(true);
                   }
                 }}
@@ -453,14 +463,22 @@ const Profile = () => {
                   </div>
                   <Switch
                     checked={isBiometricsEnabled}
-                    onCheckedChange={(checked) => {
-                      setBiometricsEnabled(checked);
-                      toast({
-                        title: checked ? "Biometrics Enabled" : "Biometrics Disabled",
-                        description: checked
-                          ? "You can now use biometrics to unlock your vault."
-                          : "Biometrics has been disabled.",
-                      });
+                    onCheckedChange={async (checked) => {
+                      try {
+                        await setBiometricsEnabled(checked);
+                        toast({
+                          title: checked ? "Biometrics Enabled" : "Biometrics Disabled",
+                          description: checked
+                            ? "You can now use biometrics to unlock your vault."
+                            : "Biometrics has been disabled.",
+                        });
+                      } catch (err) {
+                        toast({
+                          variant: "destructive",
+                          title: "Error",
+                          description: "Failed to update biometrics preference.",
+                        });
+                      }
                     }}
                   />
                 </div>
@@ -476,10 +494,10 @@ const Profile = () => {
               </>
             )}
 
-            {isSettingPin && (
+            {isSettingPin && !isVerifying && (
               <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4 animate-in fade-in slide-in-from-top-4">
                 <div className="flex items-center justify-between">
-                  <Label>Set 6-Digit PIN</Label>
+                  <Label>Step 1: Set New 6-Digit PIN</Label>
                   <Button variant="ghost" size="sm" onClick={() => {
                     setIsSettingPin(false);
                     setNewPin("");
@@ -503,18 +521,55 @@ const Profile = () => {
                 <Button
                   className="w-full"
                   disabled={newPin.length !== 6}
-                  onClick={() => {
-                    setPin(newPin);
-                    setIsSettingPin(false);
-                    setNewPin("");
-                    toast({
-                      title: "PIN Set Successfully",
-                      description: "Your digital vault is now secured.",
-                    });
-                  }}
+                  onClick={handleSendVerificationCode}
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Continue to Email Verification
+                </Button>
+              </div>
+            )}
+
+            {isVerifying && (
+              <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4 animate-in fade-in slide-in-from-top-4">
+                <div className="flex items-center justify-between">
+                  <Label>Step 2: Enter Verification Code</Label>
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    setIsVerifying(false);
+                    setVerificationCode("");
+                  }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground text-center">
+                  We've sent a code to {user?.email}
+                </p>
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={verificationCode}
+                    onChange={setVerificationCode}
+                  >
+                    <InputOTPGroup>
+                      {[...Array(6)].map((_, i) => (
+                        <InputOTPSlot key={i} index={i} className="h-12 w-10 md:w-12 bg-background" />
+                      ))}
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={verificationCode.length !== 6}
+                  onClick={handleVerifyAndSave}
                 >
                   <ShieldCheck className="h-4 w-4 mr-2" />
-                  Save PIN
+                  Verify & Save PIN
+                </Button>
+                <Button
+                  variant="link"
+                  className="w-full text-xs"
+                  onClick={handleSendVerificationCode}
+                >
+                  Didn't receive a code? Resend
                 </Button>
               </div>
             )}
