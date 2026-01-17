@@ -12,20 +12,20 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check session on mount
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user && window.location.pathname === "/") {
-        navigate("/dashboard");
+    const handleRedirection = (session: any) => {
+      if (session?.user) {
+        navigate("/dashboard", { replace: true });
       }
     };
-    checkSession();
 
-    // Listen for auth state changes (crucial for OAuth redirects on mobile)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user && window.location.pathname === "/") {
-        navigate("/dashboard");
-      }
+    // Initial check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleRedirection(session);
+    });
+
+    // Listen for changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleRedirection(session);
     });
 
     return () => subscription.unsubscribe();
