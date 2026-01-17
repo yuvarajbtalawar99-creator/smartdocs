@@ -20,8 +20,8 @@ const Navbar = () => {
           <Link to="/" className="flex items-center gap-2 group">
             <div className="relative">
               <div className="absolute inset-0 bg-primary/20 rounded-lg blur-lg group-hover:bg-primary/30 transition-colors" />
-              <div className="relative bg-white p-1.5 rounded-lg border border-primary/20 shadow-sm overflow-hidden">
-                <img src="/logo.png" alt="SmartDocs Logo" className="h-6 w-6 object-contain" />
+              <div className="relative bg-white w-9 h-9 rounded-lg border border-primary/20 shadow-sm overflow-hidden flex items-center justify-center">
+                <img src="/logo.png" alt="SmartDocs Logo" className="w-full h-full object-cover" />
               </div>
             </div>
             <span className="text-xl font-bold text-foreground">

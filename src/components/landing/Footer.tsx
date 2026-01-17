@@ -9,8 +9,8 @@ const Footer = () => {
           {/* Brand */}
           <div className="md:col-span-1">
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="bg-primary/10 p-2 rounded-lg border border-primary/20">
-                <FileText className="h-5 w-5 text-primary" />
+              <div className="bg-white w-8 h-8 rounded-lg border border-primary/20 shadow-sm overflow-hidden flex items-center justify-center">
+                <img src="/logo.png" alt="SmartDocs Logo" className="w-full h-full object-cover" />
               </div>
               <span className="text-lg font-bold text-foreground">
                 Smart<span className="text-primary">Docs</span>
