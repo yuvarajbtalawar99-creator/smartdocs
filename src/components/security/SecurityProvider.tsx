@@ -2,7 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useUser } from "@/integrations/supabase/hooks/useUser";
 import LockScreen from "@/components/security/LockScreen";
 import { supabase } from "@/integrations/supabase/client";
-import { SecurityContext, SecurityContextType } from "./SecurityContext";
+import { SecurityContext, SecurityContextType, useSecurity } from "./SecurityContext";
+export { useSecurity, SecurityContext };
+export type { SecurityContextType };
 
 export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { data: user } = useUser();

@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { User } from "@supabase/supabase-js";
 
 import { useUser } from "@/integrations/supabase/hooks/useUser";
-import { useSecurity } from "@/components/security/SecurityProvider";
+import { useSecurity } from "@/components/security/SecurityContext";
 import { Switch } from "@/components/ui/switch";
 import {
   InputOTP,
