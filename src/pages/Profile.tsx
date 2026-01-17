@@ -10,13 +10,15 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { User } from "@supabase/supabase-js";
 
+import { useUser } from "@/integrations/supabase/hooks/useUser";
+
 const Profile = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const { data: user, isLoading: userLoading } = useUser();
+  const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const [profileData, setProfileData] = useState({
     full_name: "",
@@ -31,35 +33,14 @@ const Profile = () => {
   });
 
   useEffect(() => {
-    loadUserProfile();
-  }, []);
-
-  const loadUserProfile = async () => {
-    try {
-      const { data: { user: currentUser }, error } = await supabase.auth.getUser();
-      
-      if (error || !currentUser) {
-        navigate("/auth");
-        return;
-      }
-
-      setUser(currentUser);
+    if (user) {
       setProfileData({
-        full_name: currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "",
-        email: currentUser.email || "",
-        avatar_url: currentUser.user_metadata?.avatar_url || "",
+        full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "",
+        email: user.email || "",
+        avatar_url: user.user_metadata?.avatar_url || "",
       });
-    } catch (error) {
-      console.error("Error loading profile:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load profile data.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [user]);
 
   const handleProfileUpdate = async () => {
     if (!user) return;
@@ -80,9 +61,6 @@ const Profile = () => {
         title: "Profile Updated",
         description: "Your profile has been updated successfully.",
       });
-
-      // Reload user data
-      await loadUserProfile();
     } catch (error: any) {
       toast({
         title: "Update Failed",
@@ -98,7 +76,7 @@ const Profile = () => {
     if (!e.target.files || !e.target.files[0] || !user) return;
 
     const file = e.target.files[0];
-    
+
     // Validate file type (images only)
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (!validTypes.includes(file.type)) {
@@ -223,7 +201,7 @@ const Profile = () => {
     navigate("/auth");
   };
 
-  if (loading) {
+  if (userLoading) {
     return (
       <Layout>
         <div className="max-w-4xl mx-auto">

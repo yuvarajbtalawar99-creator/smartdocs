@@ -22,5 +22,6 @@ export const useBills = (userId?: string) => {
             if (error) throw error;
             return data;
         },
+        enabled: !!userId,
     });
 };
