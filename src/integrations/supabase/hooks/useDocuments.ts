@@ -33,6 +33,5 @@ export const useDocuments = (userId?: string) => {
             return lastPage.length === PAGE_SIZE ? allPages.length : undefined;
         },
         initialPageParam: 0,
-        enabled: !!userId,
     });
 };
