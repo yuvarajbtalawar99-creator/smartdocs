@@ -248,7 +248,7 @@ const Profile = () => {
   };
 
   const handleVerifyAndSave = async () => {
-    if (verificationCode === generatedCode) {
+    if (!hasPin || verificationCode === generatedCode) {
       try {
         await setPin(newPin);
         setIsSettingPin(false);
@@ -581,10 +581,10 @@ const Profile = () => {
                 <Button
                   className="w-full"
                   disabled={newPin.length !== 6}
-                  onClick={handleSendVerificationCode}
+                  onClick={hasPin ? handleSendVerificationCode : handleVerifyAndSave}
                 >
-                  <Mail className="h-4 w-4 mr-2" />
-                  Continue to Email Verification
+                  {hasPin ? <Mail className="h-4 w-4 mr-2" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                  {hasPin ? "Continue to Email Verification" : "Save PIN Now"}
                 </Button>
               </div>
             )}
