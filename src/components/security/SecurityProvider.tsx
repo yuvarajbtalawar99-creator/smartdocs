@@ -26,24 +26,32 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const savedPin = localStorage.getItem(`sd_pin_${user.id}`);
             const bioEnabled = localStorage.getItem(`sd_bio_${user.id}`) === "true";
 
+            // Check if already unlocked in this specific browser session
+            const isUnlockedInSession = sessionStorage.getItem(`sd_unlocked_${user.id}`) === "true";
+
             setHasPin(!!savedPin);
             setIsBiometricsEnabled(bioEnabled);
 
-            // Lock the app if a PIN is set when the session starts or tab reloads
-            if (savedPin) {
+            // Lock the app if a PIN is set AND it hasn't been unlocked in this session yet
+            if (savedPin && !isUnlockedInSession) {
                 setIsLocked(true);
             }
         }
     }, [user]);
 
     const lock = () => {
-        if (hasPin) setIsLocked(true);
+        if (user && hasPin) {
+            sessionStorage.removeItem(`sd_unlocked_${user.id}`);
+            setIsLocked(true);
+        }
     };
 
     const unlock = (pin: string): boolean => {
         if (!user) return false;
         const savedPin = localStorage.getItem(`sd_pin_${user.id}`);
         if (pin === savedPin) {
+            // Mark as unlocked for this session
+            sessionStorage.setItem(`sd_unlocked_${user.id}`, "true");
             setIsLocked(false);
             return true;
         }
@@ -54,9 +62,12 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (!user) return;
         if (pin) {
             localStorage.setItem(`sd_pin_${user.id}`, pin);
+            // After setting a new PIN, we consider it unlocked for this session
+            sessionStorage.setItem(`sd_unlocked_${user.id}`, "true");
             setHasPin(true);
         } else {
             localStorage.removeItem(`sd_pin_${user.id}`);
+            sessionStorage.removeItem(`sd_unlocked_${user.id}`);
             setHasPin(false);
             setIsLocked(false);
         }
