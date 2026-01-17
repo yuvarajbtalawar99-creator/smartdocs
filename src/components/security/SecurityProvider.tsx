@@ -58,7 +58,36 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         };
 
         fetchSecuritySettings();
-    }, [user]);
+
+        // Add visibility change listener for auto-locking
+        let backgroundedTime: number | null = null;
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'hidden') {
+                backgroundedTime = Date.now();
+                // Persist the hidden time to handle app restarts
+                localStorage.setItem(`sd_last_hidden_${user?.id}`, backgroundedTime.toString());
+            } else if (document.visibilityState === 'visible') {
+                const now = Date.now();
+                const lastHidden = localStorage.getItem(`sd_last_hidden_${user?.id}`);
+                const hasPinSet = !!dbPinHash;
+
+                if (hasPinSet && lastHidden) {
+                    const hiddenDuration = Date.now() - parseInt(lastHidden);
+                    // Lock if backgrounded for more than 1 minute, or if session was cleared
+                    if (hiddenDuration > 60000) {
+                        setIsLocked(true);
+                        sessionStorage.removeItem(`sd_unlocked_${user?.id}`);
+                    }
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [user, dbPinHash]);
 
     const lock = () => {
         if (user && hasPin) {

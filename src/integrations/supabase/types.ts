@@ -110,6 +110,38 @@ export type Database = {
         }
         Relationships: []
       }
+      user_security: {
+        Row: {
+          user_id: string
+          pin_hash: string | null
+          biometrics_enabled: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          pin_hash?: string | null
+          biometrics_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          pin_hash?: string | null
+          biometrics_enabled?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_security_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
