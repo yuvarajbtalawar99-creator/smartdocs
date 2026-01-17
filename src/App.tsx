@@ -19,6 +19,8 @@ const TestConnection = lazy(() => import("./pages/TestConnection"));
 const TestGoogleAuth = lazy(() => import("./pages/TestGoogleAuth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
+import { SecurityProvider } from "@/components/security/SecurityProvider";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -28,23 +30,24 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <ErrorBoundary>
-            <Suspense fallback={<Loading className="min-h-screen" />}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/documents" element={<Documents />} />
-                <Route path="/bills" element={<Bills />} />
-                <Route path="/notifications" element={<Notifications />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="/test-connection" element={<TestConnection />} />
-                <Route path="/test-google-auth" element={<TestGoogleAuth />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </ErrorBoundary>
+          <SecurityProvider>
+            <ErrorBoundary>
+              <Suspense fallback={<Loading className="min-h-screen" />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/documents" element={<Documents />} />
+                  <Route path="/bills" element={<Bills />} />
+                  <Route path="/notifications" element={<Notifications />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="/test-connection" element={<TestConnection />} />
+                  <Route path="/test-google-auth" element={<TestGoogleAuth />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
+          </SecurityProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
@@ -52,4 +55,3 @@ const App = () => (
 );
 
 export default App;
-

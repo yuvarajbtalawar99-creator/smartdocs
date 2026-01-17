@@ -11,14 +11,25 @@ import { useToast } from "@/hooks/use-toast";
 import { User } from "@supabase/supabase-js";
 
 import { useUser } from "@/integrations/supabase/hooks/useUser";
+import { useSecurity } from "@/components/security/SecurityProvider";
+import { Switch } from "@/components/ui/switch";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot
+} from "@/components/ui/input-otp";
+import { ShieldCheck } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const { data: user, isLoading: userLoading } = useUser();
+  const { hasPin, setPin, isBiometricsEnabled, setBiometricsEnabled } = useSecurity();
   const [saving, setSaving] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [isSettingPin, setIsSettingPin] = useState(false);
+  const [newPin, setNewPin] = useState("");
 
   const [profileData, setProfileData] = useState({
     full_name: "",
@@ -392,6 +403,119 @@ const Profile = () => {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Vault Security */}
+        <Card className="mb-6 border-primary/20 shadow-lg shadow-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              Vault Security
+            </CardTitle>
+            <CardDescription>Secure your digital vault with a 6-digit PIN and biometrics</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border">
+              <div className="space-y-0.5">
+                <Label className="text-base">PIN Lock</Label>
+                <p className="text-sm text-muted-foreground">
+                  Ask for a 6-digit PIN when opening the app
+                </p>
+              </div>
+              <Switch
+                checked={hasPin}
+                onCheckedChange={(checked) => {
+                  if (!checked) {
+                    setPin("");
+                    toast({
+                      title: "PIN Disabled",
+                      description: "Your digital vault is no longer protected by a PIN.",
+                    });
+                  } else {
+                    // This will be handled by the PIN entry UI
+                    setIsSettingPin(true);
+                  }
+                }}
+              />
+            </div>
+
+            {hasPin && (
+              <>
+                <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Biometric Unlock</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Use fingerprint or face recognition to unlock
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isBiometricsEnabled}
+                    onCheckedChange={(checked) => {
+                      setBiometricsEnabled(checked);
+                      toast({
+                        title: checked ? "Biometrics Enabled" : "Biometrics Disabled",
+                        description: checked
+                          ? "You can now use biometrics to unlock your vault."
+                          : "Biometrics has been disabled.",
+                      });
+                    }}
+                  />
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setIsSettingPin(true)}
+                >
+                  <Lock className="h-4 w-4 mr-2" />
+                  Change 6-Digit PIN
+                </Button>
+              </>
+            )}
+
+            {isSettingPin && (
+              <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-4 animate-in fade-in slide-in-from-top-4">
+                <div className="flex items-center justify-between">
+                  <Label>Set 6-Digit PIN</Label>
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    setIsSettingPin(false);
+                    setNewPin("");
+                  }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={newPin}
+                    onChange={setNewPin}
+                  >
+                    <InputOTPGroup>
+                      {[...Array(6)].map((_, i) => (
+                        <InputOTPSlot key={i} index={i} className="h-12 w-10 md:w-12 bg-background" />
+                      ))}
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={newPin.length !== 6}
+                  onClick={() => {
+                    setPin(newPin);
+                    setIsSettingPin(false);
+                    setNewPin("");
+                    toast({
+                      title: "PIN Set Successfully",
+                      description: "Your digital vault is now secured.",
+                    });
+                  }}
+                >
+                  <ShieldCheck className="h-4 w-4 mr-2" />
+                  Save PIN
+                </Button>
               </div>
             )}
           </CardContent>

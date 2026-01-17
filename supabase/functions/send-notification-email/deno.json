@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "deno.window",
+      "deno.ns",
+      "deno.unstable"
+    ],
+    "types": [
+      "https://raw.githubusercontent.com/supabase/functions-js/main/src/edge-runtime.d.ts"
+    ]
+  },
+  "importMap": "../import_map.json",
+  "imports": {}
+}
