@@ -14,60 +14,63 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const [isBiometricsEnabled, setIsBiometricsEnabled] = useState(false);
     const [dbPinHash, setDbPinHash] = useState<string | null>(null);
 
+    // Fetch security settings when user changes
     useEffect(() => {
         const fetchSecuritySettings = async () => {
-            if (user) {
-                try {
-                    const { data, error } = await supabase
-                        .from('user_security')
-                        .select('pin_hash, biometrics_enabled')
-                        .eq('user_id', user.id)
-                        .maybeSingle();
+            if (!user) {
+                setIsLoading(false);
+                return;
+            }
 
-                    if (error) throw error;
+            try {
+                const { data, error } = await supabase
+                    .from('user_security')
+                    .select('pin_hash, biometrics_enabled')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
 
-                    if (data) {
-                        setDbPinHash(data.pin_hash);
-                        setHasPin(!!data.pin_hash);
-                        setIsBiometricsEnabled(data.biometrics_enabled);
+                if (error) throw error;
 
-                        // Check session-based lock
-                        const isUnlockedInSession = sessionStorage.getItem(`sd_unlocked_${user.id}`) === "true";
-                        if (data.pin_hash && !isUnlockedInSession) {
-                            setIsLocked(true);
-                        }
+                if (data) {
+                    setDbPinHash(data.pin_hash);
+                    setHasPin(!!data.pin_hash);
+                    setIsBiometricsEnabled(data.biometrics_enabled);
+
+                    // Check session-based lock
+                    const isUnlockedInSession = sessionStorage.getItem(`sd_unlocked_${user.id}`) === "true";
+                    if (data.pin_hash && !isUnlockedInSession) {
+                        setIsLocked(true);
                     }
-                } catch (err) {
-                    console.error("Error fetching security settings:", err);
-                } finally {
-                    setIsLoading(false);
                 }
-            } else {
+            } catch (err) {
+                console.error("Error fetching security settings:", err);
+            } finally {
                 setIsLoading(false);
             }
         };
 
         fetchSecuritySettings();
+    }, [user?.id]);
 
-        // Add visibility change listener for auto-locking
+    // Handle auto-locking on visibility change
+    useEffect(() => {
+        if (!user || !hasPin) return;
+
         let backgroundedTime: number | null = null;
 
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'hidden') {
                 backgroundedTime = Date.now();
-                // Persist the hidden time to handle app restarts
-                localStorage.setItem(`sd_last_hidden_${user?.id}`, backgroundedTime.toString());
+                localStorage.setItem(`sd_last_hidden_${user.id}`, backgroundedTime.toString());
             } else if (document.visibilityState === 'visible') {
-                const now = Date.now();
-                const lastHidden = localStorage.getItem(`sd_last_hidden_${user?.id}`);
-                const hasPinSet = !!dbPinHash;
+                const lastHidden = localStorage.getItem(`sd_last_hidden_${user.id}`);
 
-                if (hasPinSet && lastHidden) {
+                if (lastHidden) {
                     const hiddenDuration = Date.now() - parseInt(lastHidden);
-                    // Lock if backgrounded for more than 1 minute, or if session was cleared
+                    // Lock if backgrounded for more than 1 minute
                     if (hiddenDuration > 60000) {
                         setIsLocked(true);
-                        sessionStorage.removeItem(`sd_unlocked_${user?.id}`);
+                        sessionStorage.removeItem(`sd_unlocked_${user.id}`);
                     }
                 }
             }
@@ -77,7 +80,7 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [user, dbPinHash]);
+    }, [user?.id, hasPin]);
 
     const lock = () => {
         if (user && hasPin) {

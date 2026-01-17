@@ -30,8 +30,8 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <SecurityProvider>
-            <ErrorBoundary>
+          <ErrorBoundary>
+            <SecurityProvider>
               <Suspense fallback={<Loading className="min-h-screen" />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
@@ -46,8 +46,8 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
-            </ErrorBoundary>
-          </SecurityProvider>
+            </SecurityProvider>
+          </ErrorBoundary>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
