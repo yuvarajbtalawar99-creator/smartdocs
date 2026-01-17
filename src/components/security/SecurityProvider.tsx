@@ -1,20 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useUser } from "@/integrations/supabase/hooks/useUser";
-import LockScreen from "./LockScreen";
+import LockScreen from "@/components/security/LockScreen";
 import { supabase } from "@/integrations/supabase/client";
-
-interface SecurityContextType {
-    isLocked: boolean;
-    isLoading: boolean;
-    lock: () => void;
-    unlock: (pin: string) => boolean;
-    hasPin: boolean;
-    setPin: (pin: string) => Promise<void>;
-    isBiometricsEnabled: boolean;
-    setBiometricsEnabled: (enabled: boolean) => Promise<void>;
-}
-
-const SecurityContext = createContext<SecurityContextType | undefined>(undefined);
+import { SecurityContext, SecurityContextType } from "./SecurityContext";
 
 export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { data: user } = useUser();
@@ -112,11 +100,11 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         try {
             const { error } = await supabase
                 .from('user_security')
-                .update({
+                .upsert({
+                    user_id: user.id,
                     pin_hash: pin || null,
                     updated_at: new Date().toISOString()
-                })
-                .eq('user_id', user.id);
+                });
 
             if (error) throw error;
 
@@ -140,11 +128,11 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         try {
             const { error } = await supabase
                 .from('user_security')
-                .update({
+                .upsert({
+                    user_id: user.id,
                     biometrics_enabled: enabled,
                     updated_at: new Date().toISOString()
-                })
-                .eq('user_id', user.id);
+                });
 
             if (error) throw error;
             setIsBiometricsEnabled(enabled);
@@ -181,12 +169,4 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             </div>
         </SecurityContext.Provider>
     );
-};
-
-export const useSecurity = () => {
-    const context = useContext(SecurityContext);
-    if (context === undefined) {
-        throw new Error("useSecurity must be used within a SecurityProvider");
-    }
-    return context;
 };

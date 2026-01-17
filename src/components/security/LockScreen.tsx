@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useSecurity } from "./SecurityProvider";
+import { useSecurity } from "./SecurityContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Fingerprint, Delete, Lock, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,8 +88,8 @@ const LockScreen: React.FC = () => {
                             animate={error ? { x: [0, -10, 10, -10, 10, 0] } : {}}
                             transition={{ duration: 0.4 }}
                             className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${pin.length > i
-                                    ? "bg-primary border-primary shadow-[0_0_15px_rgba(var(--primary),0.5)]"
-                                    : "border-slate-700 bg-transparent"
+                                ? "bg-primary border-primary shadow-[0_0_15px_rgba(var(--primary),0.5)]"
+                                : "border-slate-700 bg-transparent"
                                 } ${error ? "border-destructive bg-destructive/20" : ""}`}
                         />
                     ))}
@@ -115,8 +115,8 @@ const LockScreen: React.FC = () => {
                         onClick={isBiometricsEnabled ? handleBiometricUnlock : undefined}
                         disabled={!isBiometricsEnabled}
                         className={`h-16 w-16 rounded-full flex items-center justify-center transition-colors ${isBiometricsEnabled
-                                ? "bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 shadow-[0_0_20px_rgba(var(--primary),0.1)]"
-                                : "bg-transparent text-slate-700 cursor-not-allowed"
+                            ? "bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 shadow-[0_0_20px_rgba(var(--primary),0.1)]"
+                            : "bg-transparent text-slate-700 cursor-not-allowed"
                             }`}
                     >
                         <Fingerprint className="h-8 w-8" />
