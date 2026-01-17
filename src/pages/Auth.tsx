@@ -213,13 +213,25 @@ const AuthPage = () => {
             throw error;
           }
         } else if (data.user) {
-          toast({
-            title: "Account created!",
-            description: "Welcome to SmartDocs. Redirecting to dashboard...",
-          });
+          if (data.session) {
+            toast({
+              title: "Account created!",
+              description: "Welcome to SmartDocs. Redirecting to dashboard...",
+            });
+            // Explicitly navigate if we have a session
+            setTimeout(() => navigate("/dashboard"), 500);
+          } else {
+            toast({
+              title: "Verification Required",
+              description: "Please check your email to confirm your account before signing in.",
+              duration: 10000,
+            });
+            // Switch to signin mode after a delay so they can see the message
+            setTimeout(() => setMode("signin"), 5000);
+          }
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password,
         });
@@ -234,11 +246,13 @@ const AuthPage = () => {
           } else {
             throw error;
           }
-        } else {
+        } else if (data.session) {
           toast({
             title: "Welcome back!",
             description: "Redirecting to dashboard...",
           });
+          // Explicitly navigate
+          setTimeout(() => navigate("/dashboard"), 500);
         }
       }
     } catch (error: any) {

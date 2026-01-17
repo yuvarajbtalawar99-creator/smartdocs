@@ -108,7 +108,8 @@ CREATE TABLE IF NOT EXISTS documents (
   file_type TEXT NOT NULL,
   file_size BIGINT,
   uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Bills table
@@ -120,8 +121,12 @@ CREATE TABLE IF NOT EXISTS bills (
   due_date DATE NOT NULL,
   frequency TEXT NOT NULL,
   file_path TEXT NOT NULL,
+  file_url TEXT,
+  file_name TEXT,
+  file_type TEXT,
   uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   paid BOOLEAN DEFAULT FALSE,
   reminder_sent BOOLEAN DEFAULT FALSE
 );
