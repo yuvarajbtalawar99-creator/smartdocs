@@ -8,32 +8,32 @@ const HeroSection = () => {
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20">
       {/* Background Pattern */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-secondary/20" />
-        {/* Animated code pattern */}
-        <div className="absolute inset-0 opacity-5">
-          {[...Array(20)].map((_, i) => (
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-secondary/10" />
+        {/* Animated code pattern - Reduced for mobile */}
+        <div className="absolute inset-0 opacity-[0.03]">
+          {[...Array(typeof window !== 'undefined' && window.innerWidth < 1024 ? 8 : 15)].map((_, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0 }}
-              animate={{ opacity: [0.3, 0.7, 0.3] }}
+              animate={{ opacity: [0.2, 0.4, 0.2] }}
               transition={{
-                duration: 3,
-                delay: i * 0.2,
+                duration: 4,
+                delay: i * 0.3,
                 repeat: Infinity,
               }}
-              className="absolute text-xs font-mono text-foreground whitespace-nowrap"
+              className="absolute text-[10px] md:text-xs font-mono text-foreground whitespace-nowrap"
               style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
+                left: `${(i * 13) % 100}%`,
+                top: `${(i * 17) % 100}%`,
               }}
             >
               {["AADHAAR", "PAN", "SECURE", "DOCS", "BILLS", "ENCRYPT"][i % 6]}
             </motion.div>
           ))}
         </div>
-        {/* Glow effects */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse-glow" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-glow-secondary/10 rounded-full blur-3xl animate-pulse-glow" style={{ animationDelay: '1.5s' }} />
+        {/* Glow effects - Simplified for mobile */}
+        <div className="absolute top-1/4 left-1/4 w-64 md:w-96 h-64 md:h-96 bg-primary/5 md:bg-primary/10 rounded-full blur-3xl animate-pulse-glow" style={{ animationDuration: '4s' }} />
+        <div className="absolute bottom-1/4 right-1/4 w-64 md:w-96 h-64 md:h-96 bg-emerald-500/5 md:bg-emerald-500/10 rounded-full blur-3xl animate-pulse-glow" style={{ animationDuration: '5s', animationDelay: '1.5s' }} />
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
@@ -67,7 +67,7 @@ const HeroSection = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto text-balance"
           >
-            Store, manage, and access all your important documents and bills in one secure place. 
+            Store, manage, and access all your important documents and bills in one secure place.
             Never miss a payment with smart reminders.
           </motion.p>
 

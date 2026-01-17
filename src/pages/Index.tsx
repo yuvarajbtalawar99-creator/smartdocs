@@ -12,11 +12,17 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event, session) => {
+    // Check session on mount without active redirection loop
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        navigate("/dashboard");
+        // Only redirect if they are at the base path and logged in
+        if (window.location.pathname === "/") {
+          navigate("/dashboard");
+        }
       }
-    });
+    };
+    checkSession();
   }, [navigate]);
 
   return (

@@ -40,30 +40,43 @@ const Layout = ({ children }: LayoutProps) => {
   }, []);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+    // Initial session check
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+          setUser(session?.user ?? null);
+          setLoading(false);
 
-      if (!session?.user) {
-        navigate("/auth");
-      } else {
-        loadNotificationCount();
+          if (!session?.user && location.pathname !== "/auth") {
+            navigate("/auth");
+          } else if (session?.user) {
+            loadNotificationCount();
+          }
+        }
+      } catch (error) {
+        console.error("Session check error:", error);
+        if (mounted) setLoading(false);
       }
-    });
+    };
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+    checkSession();
 
-      if (!session?.user) {
-        navigate("/auth");
-      } else {
-        loadNotificationCount();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (mounted) {
+        setUser(session?.user ?? null);
+        setLoading(false);
+
+        if (event === 'SIGNED_OUT') {
+          navigate("/auth");
+        } else if (session?.user) {
+          loadNotificationCount();
+        }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, mounted, location.pathname]);
 
   useEffect(() => {
     if (user) {
@@ -183,8 +196,8 @@ const Layout = ({ children }: LayoutProps) => {
 
                     {/* Icon with gradient background when active */}
                     <div className={`p-2 rounded-lg transition-all duration-200 ${isActive(item.path)
-                        ? `bg-gradient-to-br ${item.gradient} shadow-md`
-                        : "bg-muted group-hover:bg-gradient-to-br group-hover:" + item.gradient
+                      ? `bg-gradient-to-br ${item.gradient} shadow-md`
+                      : "bg-muted group-hover:bg-gradient-to-br group-hover:" + item.gradient
                       }`}>
                       <item.icon className={`h-4 w-4 ${isActive(item.path) ? "text-white" : "text-muted-foreground group-hover:text-white"}`} />
                     </div>

@@ -45,6 +45,7 @@ const AuthPage = () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (mounted && session?.user) {
+          // If already on /auth but have a session, go to dashboard
           navigate("/dashboard");
         }
       } catch (error) {
@@ -55,15 +56,8 @@ const AuthPage = () => {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (mounted && session?.user) {
-        navigate("/dashboard");
-      }
-    });
-
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
   }, [navigate]);
 
@@ -302,9 +296,11 @@ const AuthPage = () => {
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute inset-0 opacity-[0.02]">
             {useMemo(() => {
-              const patternItems = Array.from({ length: 30 }, (_, i) => {
+              // Reduce items for mobile performance, use more on desktop
+              const itemCount = typeof window !== 'undefined' && window.innerWidth < 1024 ? 12 : 25;
+              const patternItems = Array.from({ length: itemCount }, (_, i) => {
                 const left = (i % 5) * 20 + Math.random() * 10;
-                const top = Math.floor(i / 5) * 15 + Math.random() * 5;
+                const top = Math.floor(i / (itemCount / 5)) * (100 / (itemCount / 5)) + Math.random() * 5;
                 const rotation = Math.random() * 10 - 5;
                 const text = ["DOC", "PAN", "PDF", "BILL", "SEC", "DATA"][i % 6];
                 return { left, top, rotation, text, key: i };
