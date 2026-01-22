@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDocuments } from "@/integrations/supabase/hooks/useDocuments";
 import { useDownload } from "@/integrations/supabase/hooks/useDownload";
@@ -420,12 +421,27 @@ const Documents = () => {
     return <File className="h-5 w-5" />;
   };
 
+  const getDaysUntilExpiry = (expiryDate: string) => {
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  const isRecent = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const diff = Math.ceil((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    return diff <= 7;
+  };
+
+  const expiringSoonCount = documents.filter(doc =>
+    doc.expiry_date && getDaysUntilExpiry(doc.expiry_date) <= 30 && getDaysUntilExpiry(doc.expiry_date) >= 0
+  ).length;
+
+  const recentUploadsCount = documents.filter(doc => isRecent(doc.uploaded_at)).length;
+
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    return format(new Date(dateString), 'MMM dd, yyyy');
   };
 
   return (
@@ -560,6 +576,34 @@ const Documents = () => {
               </Dialog>
             </div>
           </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Documents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{documents.length}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Expiring Soon</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-500">{expiringSoonCount}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Recent Uploads</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-500">{recentUploadsCount}</div>
+            </CardContent>
+          </Card>
         </div>
 
         <Dialog open={editDialogOpen} onOpenChange={(open) => {
@@ -704,97 +748,99 @@ const Documents = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="space-y-4">
             <AnimatePresence>
-              {filteredDocuments.map((doc, index) => (
-                <motion.div
-                  key={doc.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                >
-                  <Card className="hover:border-primary/30 transition-colors h-full">
-                    <CardHeader>
-                      <div className="flex items-start gap-3">
-                        {getFileIcon(doc.file_type)}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <CardTitle className="text-lg font-semibold mb-2">{doc.type}</CardTitle>
-                            {offlineStatus[doc.id] && (
-                              <div className="mb-2 text-green-500" title="Available offline">
-                                <CheckCircle2 className="h-4 w-4" />
-                              </div>
-                            )}
-                          </div>
-                          <CardDescription className="text-sm text-muted-foreground truncate">
-                            {doc.name}
-                          </CardDescription>
-                          {doc.expiry_date && (
-                            <div className={`mt-2 text-xs font-medium inline-flex items-center px-2 py-0.5 rounded-full ${new Date(doc.expiry_date) < new Date()
-                              ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                              }`}>
-                              <CalendarIcon className="h-3 w-3 mr-1" />
-                              Expires: {format(new Date(doc.expiry_date), 'MMM dd, yyyy')}
+              {filteredDocuments.map((doc, index) => {
+                const daysUntilExpiry = doc.expiry_date ? getDaysUntilExpiry(doc.expiry_date) : null;
+                return (
+                  <motion.div
+                    key={doc.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                  >
+                    <Card className="hover:border-primary/30 transition-colors">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              {getFileIcon(doc.file_type)}
+                              <CardTitle className="text-lg">{doc.type}</CardTitle>
+                              {offlineStatus[doc.id] && (
+                                <div className="text-green-500" title="Available offline">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                </div>
+                              )}
+                              {doc.expiry_date && (
+                                <Badge
+                                  className={`text-xs ${daysUntilExpiry! < 0
+                                    ? "bg-red-500/10 text-red-500 border-red-500/20"
+                                    : daysUntilExpiry! <= 30
+                                      ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                      : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                    }`}
+                                  variant="outline"
+                                >
+                                  {daysUntilExpiry! < 0 ? "Expired" : `Expires in ${daysUntilExpiry} days`}
+                                </Badge>
+                              )}
                             </div>
-                          )}
+                            <CardDescription>
+                              {doc.name}
+                            </CardDescription>
+                          </div>
+                          <div className="text-right text-sm text-muted-foreground">
+                            Uploaded {formatDate(doc.uploaded_at)}
+                          </div>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex justify-between items-center text-sm text-muted-foreground mb-4">
-                        <span>{formatDate(doc.uploaded_at)}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleView(doc)}
-                        >
-                          <Eye className="h-3 w-3 mr-2" />
-                          View
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleDownload(doc)}
-                          disabled={fileDownloading === doc.file_path}
-                        >
-                          {fileDownloading === doc.file_path ? (
-                            <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-2" />
-                          ) : (
-                            <Download className="h-3 w-3 mr-2" />
-                          )}
-                          {fileDownloading === doc.file_path ? "..." : "Download"}
-                        </Button>
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => handleEdit(doc)}
-                        >
-                          <Edit className="h-3 w-3 mr-2" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(doc.id)}
-                        >
-                          <Trash2 className="h-3 w-3 mr-2" />
-                          Delete
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleView(doc)}
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDownload(doc)}
+                            disabled={fileDownloading === doc.file_path}
+                          >
+                            {fileDownloading === doc.file_path ? (
+                              <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin mr-1" />
+                            ) : (
+                              <Download className="h-3 w-3 mr-1" />
+                            )}
+                            {fileDownloading === doc.file_path ? "..." : "Download"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(doc)}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDelete(doc.id)}
+                            className="text-destructive hover:text-destructive ml-auto"
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
           </div>
         )}
