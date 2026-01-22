@@ -427,18 +427,7 @@ const Documents = () => {
     return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  const isRecent = (dateString: string) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const diff = Math.ceil((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    return diff <= 7;
-  };
 
-  const expiringSoonCount = documents.filter(doc =>
-    doc.expiry_date && getDaysUntilExpiry(doc.expiry_date) <= 30 && getDaysUntilExpiry(doc.expiry_date) >= 0
-  ).length;
-
-  const recentUploadsCount = documents.filter(doc => isRecent(doc.uploaded_at)).length;
 
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), 'MMM dd, yyyy');
@@ -576,34 +565,6 @@ const Documents = () => {
               </Dialog>
             </div>
           </div>
-        </div>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Documents</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{documents.length}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Expiring Soon</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-amber-500">{expiringSoonCount}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Recent Uploads</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-500">{recentUploadsCount}</div>
-            </CardContent>
-          </Card>
         </div>
 
         <Dialog open={editDialogOpen} onOpenChange={(open) => {
